@@ -145,8 +145,9 @@ def load_eeg(subject_paths, data_channels, reference_channels,
     
     all_data = sorted(all_data, key=lambda v: v[0])
     
-    raw_ret = mne.io.RawArray(np.concatenate([mat for _, mat in all_data], axis=1),
-                              mne_info)
+    raw_ret = mne.concatenate_raws(
+        [mne.io.RawArray(mat, mne_info) for _, mat in all_data]
+    )
     
     # Set reference.
     # TODO(EEG) is this reference right? just using the average of bilateral channels
