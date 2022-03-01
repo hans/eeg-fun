@@ -136,7 +136,8 @@ def load_eeg(subject_paths, data_channels, reference_channels,
         subject, run = info_re.findall(path.name)[0]
         data = scipy.io.loadmat(path)
         
-        mat = np.concatenate([data["eegData"].T, data["mastoids"].T], axis=0)
+        mat = np.concatenate([data["eegData"].T, data["mastoids"].T], axis=0) \
+            .astype(np.float32)
         
         # TODO(EEG) is this scaling right?
         mat /= 1e6
