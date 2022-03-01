@@ -6,10 +6,91 @@ import numpy as np
 import pandas as pd
 import scipy.io
 
+
 def strip_accents(s):
     return unicodedata.normalize("NFKD", s).encode("ASCII", "ignore").decode("utf-8")
 
-## Broderick-specific utilities
+
+def run_n400(eeg_paths, data_channels, reference_channels,
+             sample_rate,
+             stim_df,
+             filter_low=1., filter_high=8.,
+             epoch_window=(-0.2, 0.5),
+             test_window=(0.4, 0.45)):
+    """
+    Run an N400 analysis for a single subject, whose EEG
+    data live in Broderick2018 format at `eeg_paths` (one
+    file per run).
+    
+    Args:
+        filter_low: Lower end of band-pass filter in Hz
+        filter_high: Higher end of band-pass filter in Hz
+        epoch_window: Edges of epoch temporal window
+        test_window: Edges of window within each epoch on which to run test 
+            relative to zero point
+    """
+    
+    # Load and preprocess EEG data. Returns one concatenated Raw sequence
+    # describing all runs.
+    raw, run_offsets = load_eeg(eeg_paths, data_channels, reference_channels,
+                                sample_rate=sample_rate,
+                                filter_low=filter_low,
+                                filter_high=filter_high)
+    
+    # Convert word onset information into MNE event representation.
+    events_seq = prepare_events_seq(stim_df, run_offsets)
+    
+    # Compute epochs based on event representation.
+    epoch_tmin, epoch_tmax = epoch_window
+    epochs = mne.Epochs(raw, events_seq, preload=True,
+                        tmin=epoch_tmin, tmax=epoch_tmax)
+    
+    # Compute dataframe describing responses at test window.
+    # TODO don't enable baselining across run boundaries
+    baselined_df = epochs.apply_baseline().crop(*test_window) \
+        .to_data_frame(index=["condition", "epoch", "time"])
+    # # Merge in item numbers.
+    # baselined_df = pd.merge(
+    #     baselined_df.reset_index(),
+    #     stim_df.reset_index()[["content_word_idx", "item"]],
+    #     left_on="epoch",
+    #     right_on="content_word_idx"
+    # )
+    merged_df = pd.concat([
+        stim_df.reset_index(),
+        baselined_df.groupby(["condition", "epoch"]).mean().reset_index()
+    ], axis=1)
+    
+    return merged_df
+    
+    
+def prepare_events_seq(stim_df, run_offsets, word_event_id=2):
+    """
+    Prepare an MNE event-matrix representation with one event per
+    word onset.
+    
+    Args:
+        stim_df:
+        run_offsets: `num_runs` array describing the sample ID at which each 
+            run begins in the concatenated sample sequence
+    """
+    
+    events_arr = []
+    
+    for i, run_offset in enumerate(run_offsets):
+        word_offsets = stim_df.loc[i + 1].sample_id + run_offset
+
+        events_arr.append(np.stack([
+            word_offsets,
+            np.zeros_like(word_offsets),
+            word_event_id * np.ones_like(word_offsets)
+        ], axis=1))
+        
+    return np.concatenate(events_arr)
+    
+
+
+## Broderick-specific data utilities
 
 def load_stimuli(path):
     data = scipy.io.loadmat(path)
