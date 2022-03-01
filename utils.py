@@ -56,6 +56,9 @@ def load_eeg(subject_paths, data_channels, reference_channels,
         data = scipy.io.loadmat(path)
         
         mat = np.concatenate([data["eegData"].T, data["mastoids"].T], axis=0)
+        
+        # TODO(EEG) is this scaling right?
+        mat /= 1e6
         all_data.append((int(run), mat))
     
     all_data = sorted(all_data, key=lambda v: v[0])
@@ -64,7 +67,7 @@ def load_eeg(subject_paths, data_channels, reference_channels,
                               mne_info)
     
     # Set reference.
-    # TODO should this be a "bipolar reference" ?
+    # TODO(EEG) is this reference right? just using the average of bilateral channels
     raw_ret = raw_ret.set_eeg_reference(reference_channels)
     
     # Run band-pass filter.
