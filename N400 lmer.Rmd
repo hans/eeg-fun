@@ -1,0 +1,57 @@
+---
+title: "R Notebook"
+output: html_notebook
+---
+
+```{r}
+library(tidyverse)
+library(lme4)
+library(lmerTest)
+library(broom.mixed)
+```
+
+```{r}
+df <- read_csv("broderick_naturalistic_n400.csv")
+```
+
+
+```{r}
+electrode_nested = df %>% 
+  select(item, subject, surprisal, word_freq, word_len, starts_with("V")) %>% 
+  pivot_longer(cols=starts_with("V"), names_to="electrode") %>%
+  
+  group_by(electrode) %>% 
+  nest()
+
+pb = progress_estimated(nrow(electrode_nested))
+fit_model = function(electrode_df) {
+  pb$tick()$print()
+  model = lmer(value ~ surprisal + word_len + (1 | item) + (1 | subject),
+               data=electrode_df)
+  
+  return(broom::tidy(model))
+}
+ 
+electrode_lm_results = electrode_nested %>% 
+  mutate(model=map(data, fit_model)) %>% 
+  select(-data) %>% 
+  unnest(model)
+
+electrode_lm_results %>%
+  filter(effect == "fixed", term == "surprisal") %>%
+  arrange(p.value)
+```
+
+```{r}
+model <- lmer(V6 ~ surprisal + log(word_freq) + word_len + (1 | item) + (1 | subject),
+              data=df %>% filter(abs(V6) < 100),
+              control=lmerControl(optimizer="bobyqa", optCtrl=list(maxfun=100000)))
+summary(model)
+```
+
+```{r}
+df %>% ggplot(aes(x=V6)) +
+  geom_density()
+```
+
+
