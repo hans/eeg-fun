@@ -1,6 +1,6 @@
 from pathlib import Path
 import re
-from typings import Optional, Tuple
+from typings import Optional, Tuple, Dict
 
 import mne
 import numpy as np
@@ -107,4 +107,11 @@ class BroderickDatasetAdapter(MNEDatasetAdapter):
         Convert this dataset to a CDR-friendly representation. Save at the
         given paths.
         """
-        raise NotImplementedError()
+        df = self._raw_data.to_data_frame(time_format=None)
+
+        # Undo concatenation into a single raw array, so that each
+        # participant-run begins at time t=0.
+        run_dfs = [df.loc[start_idx:end_idx] for start_idx, end_idx
+                   in zip(self._run_offsets, self._run_offsets[1:] + [len(df)])]
+        run_dfs = [run_df.assign(time=run_df.time - run_df.time.min())
+                   for run_df in run_dfs]
