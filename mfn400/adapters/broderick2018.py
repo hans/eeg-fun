@@ -1,6 +1,7 @@
+import itertools
 from pathlib import Path
 import re
-from typings import Optional, Tuple, Dict
+from typings import Optional, Tuple, List, Dict
 
 import mne
 import numpy as np
@@ -28,15 +29,17 @@ class BroderickDatasetAdapter(MNEDatasetAdapter):
     def __init__(self, eeg_dir, stim_dir):
         self._prepare_stim_paths(eeg_dir, stim_dir)
 
-        self._raw_data: Optional[mne.RawData] = None
+        self._raw_data: Optional[Dict[int, mne.RawData]] = None
         """
         A continuous-time representation of the EEG data, i.e. artificially
         merging separate runs into a continuous stream. Per MNE norms there
         is a "bad" annotation at the boundaries of different runs, to prevent
         merging data across runs when filtering, epoching, etc.
+
+        Mapping from subject -> RawData.
         """
 
-        self._run_offsets: Optional[list] = None
+        self._run_offsets: Optional[Dict[int, List[int]]] = None
         """
         A list of sample indices (into `_raw_data`) describing the first sample
         of each run.
@@ -50,13 +53,22 @@ class BroderickDatasetAdapter(MNEDatasetAdapter):
     def _prepare_stim_paths(self, eeg_dir, stim_dir):
         # TODO
         ...
-        self._eeg_paths = []
-        self._stim_paths = []
+        self._eeg_paths: Dict[int, Dict[int, Path]] = {}
+        self._stim_paths: Dict[int, Path] = {}
 
     def _load_mne(self):
         """
         Load MNE continuous representation.
         """
+        raw_data, run_offsets = {}, {}
+        for subject_id, run_paths in self._eeg_paths.items():
+            raw_data[subject_id], run_offsets[subject_id] = \
+                self._load_mne_single_subject(subject_id, run_paths)
+
+        self._raw_data = raw_data
+        self._run_offsets = run_offsets
+
+    def _load_mne_single_subject(self, subject_id, run_paths) -> Tuple[mne.RawData, List[int]]:
         channel_names = self.data_channels + self.reference_channels
         mne_info = mne.create_info(channel_names, sfreq=self.sample_rate,
                                    ch_types=["eeg"] * len(channel_names))
@@ -64,8 +76,7 @@ class BroderickDatasetAdapter(MNEDatasetAdapter):
         # Each element of all_data will be (run_id, data)
         # where data is (num_data_channels + num_reference_channels) * num_samples
         all_data = []
-        for path in self._eeg_paths:
-            subject, run = info_re.findall(path.name)[0]
+        for run_id, path in run_paths.items():
             data = scipy.io.loadmat(path)
 
             mat = np.concatenate([data["eegData"].T, data["mastoids"].T], axis=0) \
@@ -73,11 +84,11 @@ class BroderickDatasetAdapter(MNEDatasetAdapter):
 
             # TODO(EEG) is this scaling right?
             mat /= 1e6
-            all_data.append((int(run), mat))
+            all_data.append((int(run_id), mat))
 
         all_data = sorted(all_data, key=lambda v: v[0])
 
-        self._raw_data = mne.concatenate_raws(
+        raw_data = mne.concatenate_raws(
             [mne.io.RawArray(mat, mne_info) for _, mat in all_data]
         )
 
@@ -86,7 +97,8 @@ class BroderickDatasetAdapter(MNEDatasetAdapter):
         for _, mat in all_data:
             run_offsets.append(acc)
             acc += mat.shape[1]
-        self._run_offsets = run_offsets
+
+        return raw_data, run_offsets
 
     def _preprocess_mne(self, filter_window: Tuple[float, float]):
         # TODO integrate
@@ -107,11 +119,24 @@ class BroderickDatasetAdapter(MNEDatasetAdapter):
         Convert this dataset to a CDR-friendly representation. Save at the
         given paths.
         """
-        df = self._raw_data.to_data_frame(time_format=None)
+        for subject_id, raw_data in self._raw_data.items():
+            # TODO write x data.
 
-        # Undo concatenation into a single raw array, so that each
-        # participant-run begins at time t=0.
-        run_dfs = [df.loc[start_idx:end_idx] for start_idx, end_idx
-                   in zip(self._run_offsets, self._run_offsets[1:] + [len(df)])]
-        run_dfs = [run_df.assign(time=run_df.time - run_df.time.min())
-                   for run_df in run_dfs]
+            df = raw_data.to_data_frame(time_format=None)
+            run_offsets = self._run_offsets[subject_id]
+
+            # Undo concatenation into a single raw array, so that each
+            # participant-run begins at time t=0.
+            run_dfs = [df.loc[start_idx:end_idx] for start_idx, end_idx
+                       in zip(run_offsets, run_offsets[1:] + [len(df)])]
+            run_dfs = [run_df.assign(time=run_df.time - run_df.time.min())
+                       for run_df in run_dfs]
+
+            df = pd.concat(run_dfs, keys=[i + 1 for i in range(len(run_dfs))],
+                           names=["run"])
+            df["subject"] = subject_id
+
+            # Write header once.
+            header = None if Path(y_path).exists() else True
+
+            df.to_csv(y_path, mode="a", sep=" ", header=header)
