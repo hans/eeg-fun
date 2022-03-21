@@ -22,39 +22,33 @@ class BroderickDatasetAdapter(MNEDatasetAdapter):
     name = "broderick2018"
 
     # acquisition parameters
-    data_channels = ...
-    reference_channels = ...
+    data_channels = [f"V{x}" for x in range(1, 129)]
+    # two mastoid references
+    reference_channels = ["M1", "M2"]
     sample_rate = 128
 
     def __init__(self, eeg_dir, stim_dir):
-        self._prepare_stim_paths(eeg_dir, stim_dir)
+        self._prepare_paths(eeg_dir, stim_dir)
+        self._load_stimuli()
+        self._load_mne()
 
-        self._raw_data: Optional[Dict[int, mne.RawData]] = None
-        """
-        A continuous-time representation of the EEG data, i.e. artificially
-        merging separate runs into a continuous stream. Per MNE norms there
-        is a "bad" annotation at the boundaries of different runs, to prevent
-        merging data across runs when filtering, epoching, etc.
+    def _prepare_paths(self, eeg_dir, stim_dir):
+        eeg_paths = itertools.groupby(sorted(eeg_dir.glob("**/*.mat")),
+                                      lambda p: info_re.match(p.name).group(1))
+        self._eeg_paths = {k: list(v) for k, v in eeg_paths}
+        self._stim_paths: Dict[int, Path] = {int(p.stem.replace("Run", "")): p
+                                             for p in stim_dir.glob("*.mat")}
 
-        Mapping from subject -> RawData.
-        """
+    def _load_stimuli(self):
+        stim_dfs = {}
+        for idx, path in self._stim_paths:
+            data = scipy.io.loadmat(path)
+            df = pd.DataFrame.from_dict({"word": [el[0][0] for el in data["wordVec"]],
+                                         "onset_time": data["onset_time"].flatten(),
+                                         "offset_time": data["offset_time"].flatten()})
+            stim_dfs[idx] = df
 
-        self._run_offsets: Optional[Dict[int, List[int]]] = None
-        """
-        A list of sample indices (into `_raw_data`) describing the first sample
-        of each run.
-        """
-
-        self._stim_df: Optional[pd.DataFrame] = None
-        """
-        Columns: `token`, `token_surprisal`, `onset_time`, `offset_time`
-        """
-
-    def _prepare_stim_paths(self, eeg_dir, stim_dir):
-        # TODO
-        ...
-        self._eeg_paths: Dict[int, Dict[int, Path]] = {}
-        self._stim_paths: Dict[int, Path] = {}
+        self._stim_df = pd.concat(stim_dfs, names=["item", "content_word_idx"])
 
     def _load_mne(self):
         """
@@ -100,28 +94,32 @@ class BroderickDatasetAdapter(MNEDatasetAdapter):
 
         return raw_data, run_offsets
 
-    def _preprocess_mne(self, filter_window: Tuple[float, float]):
-        # TODO integrate
-
+    def _preprocess_mne(self, raw_data: mne.RawData,
+                        filter_window: Tuple[float, float]) -> mne.RawData:
         # Set reference.
-        # TODO(EEG) is this reference right? just using the average of bilateral channels
-        self._raw_data = self._raw_data.set_eeg_reference(self.reference_channels)
+        # TODO(EEG) is this reference right? just using the average of
+        # bilateral channels
+        raw_data = raw_data.set_eeg_reference(self.reference_channels)
 
         # Run band-pass filter.
-        self._raw_data = self._raw_data.filter(*filter_window)
+        raw_data = raw_data.filter(*filter_window)
+
+        return raw_data
 
     @property
     def stimulus_df(self) -> pd.DataFrame:
-        raise NotImplementedError()
+        return self._stim_df
 
     def to_cdr(self, x_path, y_path):
         """
         Convert this dataset to a CDR-friendly representation. Save at the
         given paths.
         """
-        for subject_id, raw_data in self._raw_data.items():
-            # TODO write x data.
+        # Write X data.
+        self.stimulus_df.to_csv(x_path, sep=" ")
 
+        # Write Y data.
+        for subject_id, raw_data in self._raw_data.items():
             df = raw_data.to_data_frame(time_format=None)
             run_offsets = self._run_offsets[subject_id]
 

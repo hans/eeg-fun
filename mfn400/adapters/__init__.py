@@ -1,4 +1,4 @@
-from typings import Tuple
+from typings import Tuple, Optional, Dict, List
 
 import mne
 import numpy as np
@@ -11,7 +11,7 @@ class DatasetAdapter(object):
     analysis-specific data formats (for ERP, CDR, etc.).
     """
 
-    name = None
+    name = "abstract"
 
     @property
     def stimulus_df(self) -> pd.DataFrame:
@@ -31,7 +31,6 @@ class DatasetAdapter(object):
         raise NotImplementedError()
 
 
-
 class MNEDatasetAdapter(DatasetAdapter):
     """
     Dataset adapter using internal MNE representation.
@@ -42,6 +41,27 @@ class MNEDatasetAdapter(DatasetAdapter):
     """
 
     word_event_id = 2
+
+    _raw_data: Optional[Dict[int, mne.RawData]] = None
+    """
+    A continuous-time representation of the EEG data, i.e. artificially
+    merging separate runs into a continuous stream. Per MNE norms there
+    is a "bad" annotation at the boundaries of different runs, to prevent
+    merging data across runs when filtering, epoching, etc.
+
+    Mapping from subject -> RawData.
+    """
+
+    _run_offsets: Optional[Dict[int, List[int]]] = None
+    """
+    A list of sample indices (into `_raw_data`) describing the first sample
+    of each run.
+    """
+
+    _stim_df: Optional[pd.DataFrame] = None
+    """
+    Columns: `token`, `token_surprisal`, `onset_time`, `offset_time`
+    """
 
     # TODO bring over other methods from broderick2018
 
