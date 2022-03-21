@@ -42,9 +42,9 @@ class MNEDatasetAdapter(DatasetAdapter):
     """
 
     word_event_id = 2
+    preprocessed = False
 
-
-    _raw_data: Optional[Dict[int, mne.RawData]] = None
+    _raw_data: Optional[Dict[int, mne.io.Raw]] = None
     """
     A continuous-time representation of the EEG data, i.e. artificially
     merging separate runs into a continuous stream. Per MNE norms there
@@ -85,12 +85,31 @@ class MNEDatasetAdapter(DatasetAdapter):
 
         return np.concatenate(events_arr)
 
-    def to_erp(self, epoch_window: Tuple[float, float]) -> mne.Epochs:
+    def _preprocess(self, raw_data: mne.io.Raw, **kwargs) -> mne.io.Raw:
+        raise NotImplementedError()
+
+    def run_preprocessing(self, **kwargs):
+        """
+        Run any necessary preprocessing procedure on EEG data.
+        Subclasses should override `_preprocess`.
+        """
+        if self.preprocessed:
+            raise RuntimeError("run_preprocessing was already called.")
+
+        for idx in self._raw_data:
+            self._raw_data[idx] = self._preprocess(self._raw_data[idx],
+                                                   **kwargs)
+
+        self.preprocessed = True
+
+    def to_erp(self, epoch_window: Tuple[float, float],
+               **preprocessing_kwargs) -> mne.Epochs:
         """
         Prepare the dataset for ERP analysis by epoching.
         """
 
-        # TODO check that the data has been preprocessed before epoching.
+        if not self.preprocessed:
+            self.run_preprocessing(**preprocessing_kwargs)
 
         # Prepare an MNE event-matrix representation with one event per
         # word onset.
@@ -102,11 +121,15 @@ class MNEDatasetAdapter(DatasetAdapter):
 
         return epochs
 
-    def to_cdr(self, x_path, y_path):
+    def to_cdr(self, x_path, y_path, **preprocessing_kwargs):
         """
         Convert this dataset to a CDR-friendly representation. Save at the
         given paths.
         """
+
+        if not self.preprocessed:
+            self.run_preprocessing(**preprocessing_kwargs)
+
         # Write X data.
         self.stimulus_df.to_csv(x_path, sep=" ")
 

@@ -53,7 +53,7 @@ class BroderickDatasetAdapter(MNEDatasetAdapter):
         self._raw_data = raw_data
         self._run_offsets = run_offsets
 
-    def _load_mne_single_subject(self, subject_id, run_paths) -> Tuple[mne.RawData, List[int]]:
+    def _load_mne_single_subject(self, subject_id, run_paths) -> Tuple[mne.io.Raw, List[int]]:
         channel_names = self.data_channels + self.reference_channels
         mne_info = mne.create_info(channel_names, sfreq=self.sample_rate,
                                    ch_types=["eeg"] * len(channel_names))
@@ -85,8 +85,8 @@ class BroderickDatasetAdapter(MNEDatasetAdapter):
 
         return raw_data, run_offsets
 
-    def _preprocess_mne(self, raw_data: mne.RawData,
-                        filter_window: Tuple[float, float]) -> mne.RawData:
+    def _preprocess(self, raw_data: mne.io.Raw,
+                    filter_window: Tuple[float, float]) -> mne.io.Raw:
         # Set reference.
         # TODO(EEG) is this reference right? just using the average of
         # bilateral channels
