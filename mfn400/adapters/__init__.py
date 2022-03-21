@@ -25,7 +25,7 @@ class DatasetAdapter(object):
         """
         raise NotImplementedError()
 
-    def to_erp(self, epoch_window: Tuple[float, float]) -> mne.Epochs:
+    def to_erp(self, epoch_window: Tuple[float, float]) -> Dict[int, mne.Epochs]:
         """
         Prepare the dataset for ERP analysis by epoching.
         """
@@ -67,14 +67,15 @@ class MNEDatasetAdapter(DatasetAdapter):
 
     # TODO bring over other methods from broderick2018
 
-    def _prepare_events_seq(self) -> np.ndarray:
+    def _prepare_events_seq(self, subject_idx) -> np.ndarray:
         """
         Prepare an MNE event-matrix representation with one event per word
         onset.
         """
         events_arr = []
+        run_offsets = self._run_offsets[subject_idx]
 
-        for i, run_offset in enumerate(self._run_offsets):
+        for i, run_offset in enumerate(run_offsets):
             word_offsets = self._stim_df.loc[i + 1].sample_id + run_offset
 
             events_arr.append(np.stack([
@@ -103,7 +104,7 @@ class MNEDatasetAdapter(DatasetAdapter):
         self.preprocessed = True
 
     def to_erp(self, epoch_window: Tuple[float, float],
-               **preprocessing_kwargs) -> mne.Epochs:
+            **preprocessing_kwargs) -> Dict[int, mne.Epochs]:
         """
         Prepare the dataset for ERP analysis by epoching.
         """
@@ -111,13 +112,16 @@ class MNEDatasetAdapter(DatasetAdapter):
         if not self.preprocessed:
             self.run_preprocessing(**preprocessing_kwargs)
 
-        # Prepare an MNE event-matrix representation with one event per
-        # word onset.
-        events_seq = self._prepare_events_seq()
+        epochs = {}
+        for subject_idx, raw_data in self._raw_data.items():
+            # Prepare an MNE event-matrix representation with one event per
+            # word onset.
+            events_seq = self._prepare_events_seq(subject_idx)
 
-        epoch_tmin, epoch_tmax = epoch_window
-        epochs = mne.Epochs(self._raw_data, events_seq, preload=True,
-                            tmin=epoch_tmin, tmax=epoch_tmax)
+            epoch_tmin, epoch_tmax = epoch_window
+            epochs[subject_idx] = \
+                mne.Epochs(raw_data, events_seq, preload=True,
+                           tmin=epoch_tmin, tmax=epoch_tmax)
 
         return epochs
 
