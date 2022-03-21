@@ -1,3 +1,4 @@
+from pathlib import Path
 from typings import Tuple, Optional, Dict, List
 
 import mne
@@ -41,6 +42,7 @@ class MNEDatasetAdapter(DatasetAdapter):
     """
 
     word_event_id = 2
+
 
     _raw_data: Optional[Dict[int, mne.RawData]] = None
     """
@@ -99,3 +101,32 @@ class MNEDatasetAdapter(DatasetAdapter):
                             tmin=epoch_tmin, tmax=epoch_tmax)
 
         return epochs
+
+    def to_cdr(self, x_path, y_path):
+        """
+        Convert this dataset to a CDR-friendly representation. Save at the
+        given paths.
+        """
+        # Write X data.
+        self.stimulus_df.to_csv(x_path, sep=" ")
+
+        # Write Y data.
+        for subject_id, raw_data in self._raw_data.items():
+            df = raw_data.to_data_frame(time_format=None)
+            run_offsets = self._run_offsets[subject_id]
+
+            # Undo concatenation into a single raw array, so that each
+            # participant-run begins at time t=0.
+            run_dfs = [df.loc[start_idx:end_idx] for start_idx, end_idx
+                       in zip(run_offsets, run_offsets[1:] + [len(df)])]
+            run_dfs = [run_df.assign(time=run_df.time - run_df.time.min())
+                       for run_df in run_dfs]
+
+            df = pd.concat(run_dfs, keys=[i + 1 for i in range(len(run_dfs))],
+                           names=["run"])
+            df["subject"] = subject_id
+
+            # Write header once.
+            header = None if Path(y_path).exists() else True
+
+            df.to_csv(y_path, mode="a", sep=" ", header=header)
