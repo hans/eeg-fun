@@ -33,7 +33,10 @@ class BroderickDatasetAdapter(MNEDatasetAdapter):
     def __init__(self, eeg_dir, stim_path):
         self._prepare_paths(Path(eeg_dir))
 
-        self._stim_df = pd.read_csv(stim_path)
+        self._stim_df = pd.read_csv(stim_path).set_index(["item"])
+        # Compute nearest following sample for each word onset.
+        self._stim_df["sample_id"] = np.ceil(self._stim_df.onset_time * self.sample_rate).astype(int)
+
         self._load_mne()
 
     def _prepare_paths(self, eeg_dir):
