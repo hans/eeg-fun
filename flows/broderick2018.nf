@@ -24,6 +24,8 @@ params.filter_high = 8
 params.outdir = "output"
 
 process prepareStimuli {
+    label "mne"
+
     input:
     file stim_dir from stim_dir
     file fulltext from fulltext
@@ -44,6 +46,8 @@ TRANSFORMERS_CACHE=${params.transformers_cache} python \
 }
 
 process prepareCDR {
+    label "mne"
+
     input:
     file eeg_dir from eeg_dir
     file stim_df from stim_df
