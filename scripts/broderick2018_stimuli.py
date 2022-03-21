@@ -249,9 +249,11 @@ if __name__ == "__main__":
     p = ArgumentParser()
 
     p.add_argument("stim_dir", type=Path)
-    p.add_argument("fulltext-path", type=Path)
+    p.add_argument("fulltext_path", type=Path)
     p.add_argument("-o", "--out-path", type=Path)
     p.add_argument("-m", "--model", default="gpt2")
 
     p.add_argument("--surprisals-path", type=Path)
     p.add_argument("--word-freqs-path", type=Path)
+
+    main(p.parse_args())
