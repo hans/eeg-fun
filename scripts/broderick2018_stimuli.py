@@ -6,7 +6,7 @@ Pre-compute surprisals, control predictors etc.
 from argparse import ArgumentParser
 from pathlib import Path
 import re
-from typings import Tuple, List
+from types import Tuple, List
 import unicodedata
 
 import nltk

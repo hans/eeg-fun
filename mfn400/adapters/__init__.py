@@ -1,5 +1,5 @@
 from pathlib import Path
-from typings import Tuple, Optional, Dict, List
+from types import Tuple, Optional, Dict, List
 
 import mne
 import numpy as np
