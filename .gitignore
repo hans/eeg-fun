@@ -1,3 +1,7 @@
 transformers_cache
 .ipynb_checkpoints
 __pycache__
+
+.nextflow*
+work/
+out/
