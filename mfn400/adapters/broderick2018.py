@@ -17,6 +17,9 @@ info_re = re.compile(r"Subject(\d+)_Run(\d+)\.mat")
 class BroderickDatasetAdapter(MNEDatasetAdapter):
     """
     Broderick et al. 2018 naturalistic N400 dataset.
+
+    Works with stimulus data preprocessed by script
+    `scripts/broderick2018_stimuli.py`
     """
 
     name = "broderick2018"
@@ -27,28 +30,16 @@ class BroderickDatasetAdapter(MNEDatasetAdapter):
     reference_channels = ["M1", "M2"]
     sample_rate = 128
 
-    def __init__(self, eeg_dir, stim_dir):
-        self._prepare_paths(eeg_dir, stim_dir)
-        self._load_stimuli()
+    def __init__(self, eeg_dir, stim_path):
+        self._prepare_paths(eeg_dir)
+
+        self._stim_df = pd.read_csv(stim_path)
         self._load_mne()
 
-    def _prepare_paths(self, eeg_dir, stim_dir):
+    def _prepare_paths(self, eeg_dir,):
         eeg_paths = itertools.groupby(sorted(eeg_dir.glob("**/*.mat")),
                                       lambda p: info_re.match(p.name).group(1))
         self._eeg_paths = {k: list(v) for k, v in eeg_paths}
-        self._stim_paths: Dict[int, Path] = {int(p.stem.replace("Run", "")): p
-                                             for p in stim_dir.glob("*.mat")}
-
-    def _load_stimuli(self):
-        stim_dfs = {}
-        for idx, path in self._stim_paths:
-            data = scipy.io.loadmat(path)
-            df = pd.DataFrame.from_dict({"word": [el[0][0] for el in data["wordVec"]],
-                                         "onset_time": data["onset_time"].flatten(),
-                                         "offset_time": data["offset_time"].flatten()})
-            stim_dfs[idx] = df
-
-        self._stim_df = pd.concat(stim_dfs, names=["item", "content_word_idx"])
 
     def _load_mne(self):
         """
