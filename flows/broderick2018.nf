@@ -19,6 +19,9 @@ params.transformers_cache = "${baseDir}/transformers_cache"
 params.filter_low = 1
 params.filter_high = 8
 
+// CDR parameters
+params.cdr_series_ids = "item subject"
+
 /////////
 
 params.outdir = "output"
@@ -87,7 +90,10 @@ process runCDR {
 export X_train="${X}"
 export y_train="${y}"
 export outdir="${params.outdir}"
+export series_ids="${params.cdr_series_ids}"
 
-envsubst ${baseDir}/cdr_config_template.ini > cdr.ini
+envsubst < ${baseDir}/cdr_config_template.ini > cdr.ini
+
+python -m cdr.bin.train cdr.ini
 """
 }
