@@ -28,6 +28,7 @@ params.outdir = "output"
 
 process prepareStimuli {
     label "mne"
+    publishDir "${params.outdir}"
 
     input:
     file stim_dir from stim_dir
