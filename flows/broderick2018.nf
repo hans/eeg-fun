@@ -20,6 +20,8 @@ params.filter_low = 1
 params.filter_high = 8
 
 // CDR parameters
+params.cdr_response_variables = (1..128).collect({"V" + it})
+params.cdr_predictor_variables = ["surprisal"]
 params.cdr_series_ids = "item subject"
 
 /////////
@@ -85,6 +87,11 @@ process runCDR {
     input:
     tuple file(X), file(y) from CDR_data
 
+    script:
+    response_expr = params.cdr_response_variables.join(" + ")
+    predictor_expr = params.cdr_predictor_variables.join(" + ")
+    formula = "${response_expr} ~ C(${predictor_expr}, NN())"
+
 """
 #!/usr/bin/env bash
 
@@ -92,6 +99,7 @@ export X_train="${X}"
 export y_train="${y}"
 export outdir="${params.outdir}"
 export series_ids="${params.cdr_series_ids}"
+export formula="${formula}"
 
 envsubst < ${baseDir}/cdr_config_template.ini > cdr.ini
 
