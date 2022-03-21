@@ -68,6 +68,26 @@ os.environ["NUMBA_CACHE_DIR"] = "/tmp"
 from mfn400.adapters.broderick2018 import BroderickDatasetAdapter
 
 dataset = BroderickDatasetAdapter("${eeg_dir}", "${stim_df}")
-dataset.to_cdr("X.txt", "y.txt")
+dataset.to_cdr("X.txt", "y.txt",
+               filter_window=(${params.filter_low},
+                              ${params.filter_high}))
+"""
+}
+
+process runCDR {
+    label "cdr"
+    publishDir "${params.outdir}"
+
+    input:
+    tuple file(X), file(y) from CDR_data
+
+"""
+#!/usr/bin/env bash
+
+export X_train="${X}"
+export y_train="${y}"
+export outdir="${params.outdir}"
+
+envsubst ${baseDir}/cdr_config_template.ini > cdr.ini
 """
 }
