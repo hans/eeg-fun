@@ -82,7 +82,9 @@ class BroderickDatasetAdapter(MNEDatasetAdapter):
         all_data = sorted(all_data, key=lambda v: v[0])
 
         raw_data = mne.concatenate_raws(
-            [mne.io.RawArray(mat, mne_info) for _, mat in all_data]
+            [mne.io.RawArray(mat, mne_info, verbose=False)
+             for _, mat in all_data],
+            verbose=False
         )
 
         run_offsets = []
