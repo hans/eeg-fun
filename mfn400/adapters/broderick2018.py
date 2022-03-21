@@ -1,7 +1,7 @@
 import itertools
 from pathlib import Path
 import re
-from types import Optional, Tuple, List, Dict
+from typing import Optional, Tuple, List, Dict
 
 import mne
 import numpy as np
