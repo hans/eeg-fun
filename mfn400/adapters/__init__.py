@@ -152,4 +152,5 @@ class MNEDatasetAdapter(DatasetAdapter):
             # Write header once.
             header = None if Path(y_path).exists() else True
 
-            df.to_csv(y_path, mode="a", sep=" ", header=header)
+            df.to_csv(y_path, mode="a", sep=" ", header=header,
+                      float_format="%.4f")
