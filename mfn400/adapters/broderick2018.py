@@ -31,12 +31,12 @@ class BroderickDatasetAdapter(MNEDatasetAdapter):
     sample_rate = 128
 
     def __init__(self, eeg_dir, stim_path):
-        self._prepare_paths(eeg_dir)
+        self._prepare_paths(Path(eeg_dir))
 
         self._stim_df = pd.read_csv(stim_path)
         self._load_mne()
 
-    def _prepare_paths(self, eeg_dir,):
+    def _prepare_paths(self, eeg_dir):
         eeg_paths = itertools.groupby(sorted(eeg_dir.glob("**/*.mat")),
                                       lambda p: info_re.match(p.name).group(1))
         self._eeg_paths = {k: list(v) for k, v in eeg_paths}
@@ -61,7 +61,7 @@ class BroderickDatasetAdapter(MNEDatasetAdapter):
         # Each element of all_data will be (run_id, data)
         # where data is (num_data_channels + num_reference_channels) * num_samples
         all_data = []
-        for run_id, path in run_paths.items():
+        for path in run_paths:
             data = scipy.io.loadmat(path)
 
             mat = np.concatenate([data["eegData"].T, data["mastoids"].T], axis=0) \
@@ -69,6 +69,8 @@ class BroderickDatasetAdapter(MNEDatasetAdapter):
 
             # TODO(EEG) is this scaling right?
             mat /= 1e6
+
+            run_id = info_re.match(path.name).group(2)
             all_data.append((int(run_id), mat))
 
         all_data = sorted(all_data, key=lambda v: v[0])
