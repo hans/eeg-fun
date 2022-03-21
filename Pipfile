@@ -5,6 +5,8 @@ name = "pypi"
 
 [packages]
 mne = "*"
+scipy = "*"
+pandas = "*"
 
 [dev-packages]
 mypy = "*"
