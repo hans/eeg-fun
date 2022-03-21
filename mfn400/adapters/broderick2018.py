@@ -41,6 +41,9 @@ class BroderickDatasetAdapter(MNEDatasetAdapter):
                                       lambda p: info_re.match(p.name).group(1))
         self._eeg_paths = {k: list(v) for k, v in eeg_paths}
 
+        # DEV
+        self._eeg_paths = {"1": self._eeg_paths["1"]}
+
     def _load_mne(self):
         """
         Load MNE continuous representation.
