@@ -135,7 +135,13 @@ class MNEDatasetAdapter(DatasetAdapter):
             self.run_preprocessing(**preprocessing_kwargs)
 
         # Write X data.
-        self.stimulus_df.to_csv(x_path, sep=" ")
+        # Need to replicate for each subject to be compatible with CDR.
+        X_df = pd.concat({subject_idx: self.stimulus_df.reset_index()
+                          for subject_idx in self._raw_data.keys()},
+                         names=["subject"])
+        # Set expected CDR `time` column
+        X_df["time"] = X_df["onset_time"]
+        X_df.to_csv(x_path, sep=" ")
 
         # Write Y data.
         for subject_id, raw_data in self._raw_data.items():
@@ -150,7 +156,7 @@ class MNEDatasetAdapter(DatasetAdapter):
                        for run_df in run_dfs]
 
             df = pd.concat(run_dfs, keys=[i + 1 for i in range(len(run_dfs))],
-                           names=["run"])
+                           names=["run"], ignore_index=True)
             df["subject"] = subject_id
 
             # Write header once.
