@@ -26,7 +26,7 @@ params.cdr_series_ids = "item subject"
 
 /////////
 
-params.outdir = "${baseDir}/output"
+params.outdir = "${baseDir}/output/broderick2018"
 
 process prepareStimuli {
     label "mne"
