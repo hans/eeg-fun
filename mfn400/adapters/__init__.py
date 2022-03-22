@@ -82,6 +82,13 @@ class MNEDatasetAdapter(DatasetAdapter):
 
         self.preprocessed = True
 
+    def get_presentation_data(self, subject_id) -> pd.DataFrame:
+        """
+        Return a dataframe describing presentation to `subject_id`.
+        """
+        # By default, assume presentations are the same across subjects.
+        return self.stimulus_df.copy()
+
     def _to_erp_single_subjct(self, subject_id,
                               epoch_window: Tuple[float, float],
                               **preprocessing_kwargs) -> mne.Epochs:
@@ -117,8 +124,7 @@ class MNEDatasetAdapter(DatasetAdapter):
             self.run_preprocessing(**preprocessing_kwargs)
 
         # Write X data.
-        # Need to replicate for each subject to be compatible with CDR.
-        X_df = pd.concat({subject_idx: self.stimulus_df.reset_index()
+        X_df = pd.concat({subject_idx: self.get_presentation_data(subject_idx)
                           for subject_idx in self._raw_data.keys()},
                          names=["subject"])
         # Set expected CDR `time` column
