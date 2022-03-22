@@ -156,7 +156,7 @@ class MNEDatasetAdapter(DatasetAdapter):
                        for run_df in run_dfs]
 
             df = pd.concat(run_dfs, keys=[i + 1 for i in range(len(run_dfs))],
-                           names=["run"], ignore_index=True)
+                           names=["item", "run_sample_id"])
             df["subject"] = subject_id
 
             # Write header once.
