@@ -12,6 +12,7 @@ torch = "==1.11.0+cpu"
 
 [dev-packages]
 mypy = "*"
+jupyterlab = "*"
 
 [requires]
 python_version = "3.7"
