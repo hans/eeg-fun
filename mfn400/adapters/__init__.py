@@ -65,27 +65,6 @@ class MNEDatasetAdapter(DatasetAdapter):
     Columns: `token`, `token_surprisal`, `onset_time`, `offset_time`
     """
 
-    # TODO bring over other methods from broderick2018
-
-    def _prepare_events_seq(self, subject_idx) -> np.ndarray:
-        """
-        Prepare an MNE event-matrix representation with one event per word
-        onset.
-        """
-        events_arr = []
-        run_offsets = self._run_offsets[subject_idx]
-
-        for i, run_offset in enumerate(run_offsets):
-            word_offsets = self._stim_df.loc[i + 1].sample_id + run_offset
-
-            events_arr.append(np.stack([
-                word_offsets,
-                np.zeros_like(word_offsets),
-                self.word_event_id * np.ones_like(word_offsets)
-            ], axis=1))
-
-        return np.concatenate(events_arr)
-
     def _preprocess(self, raw_data: mne.io.Raw, **kwargs) -> mne.io.Raw:
         raise NotImplementedError()
 
@@ -103,8 +82,19 @@ class MNEDatasetAdapter(DatasetAdapter):
 
         self.preprocessed = True
 
+    def _to_erp_single_subjct(self, subject_id,
+                              epoch_window: Tuple[float, float],
+                              **preprocessing_kwargs) -> mne.Epochs:
+        raw = self._raw_data[subject_id]
+        events, event_id = mne.events_from_annotations(raw)
+
+        epoch_tmin, epoch_tmax = epoch_window
+        return mne.Epochs(raw, events=events, event_id=event_id,
+                          tmin=epoch_tmin, tmax=epoch_tmax,
+                          preload=True)
+
     def to_erp(self, epoch_window: Tuple[float, float],
-            **preprocessing_kwargs) -> Dict[int, mne.Epochs]:
+               **preprocessing_kwargs) -> Dict[int, mne.Epochs]:
         """
         Prepare the dataset for ERP analysis by epoching.
         """
@@ -112,17 +102,9 @@ class MNEDatasetAdapter(DatasetAdapter):
         if not self.preprocessed:
             self.run_preprocessing(**preprocessing_kwargs)
 
-        epochs = {}
-        for subject_idx, raw_data in self._raw_data.items():
-            # Prepare an MNE event-matrix representation with one event per
-            # word onset.
-            events_seq = self._prepare_events_seq(subject_idx)
-
-            epoch_tmin, epoch_tmax = epoch_window
-            epochs[subject_idx] = \
-                mne.Epochs(raw_data, events_seq, preload=True,
-                           tmin=epoch_tmin, tmax=epoch_tmax)
-
+        epochs = {self._to_erp_single_subject(subject_id, epoch_window,
+                                              **preprocessing_kwargs)
+                  for subject_id in self._raw_data}
         return epochs
 
     def to_cdr(self, x_path, y_path, **preprocessing_kwargs):
