@@ -107,6 +107,36 @@ class BroderickDatasetAdapter(MNEDatasetAdapter):
 
         return raw_data
 
+    def _prepare_events_seq(self, subject_idx) -> np.ndarray:
+        """
+        Prepare an MNE event-matrix representation with one event per word
+        onset.
+        """
+        events_arr = []
+        run_offsets = self._run_offsets[subject_idx]
+
+        for i, run_offset in enumerate(run_offsets):
+            word_offsets = self._stim_df.loc[i + 1].sample_id + run_offset
+
+            events_arr.append(np.stack([
+                word_offsets,
+                np.zeros_like(word_offsets),
+                self.word_event_id * np.ones_like(word_offsets)
+            ], axis=1))
+
+        return np.concatenate(events_arr)
+
+    def _to_erp_single_subject(self, subject_id,
+                               epoch_window: Tuple[float, float],
+                               **preprocessing_kwargs) -> mne.Epochs:
+        # Prepare an MNE event-matrix representation with one event per
+        # word onset.
+        events_seq = self._prepare_events_seq(subject_id)
+
+        epoch_tmin, epoch_tmax = epoch_window
+        return mne.Epochs(self._raw_data[subject_id], events_seq, preload=True,
+                          tmin=epoch_tmin, tmax=epoch_tmax)
+
     @property
     def stimulus_df(self) -> pd.DataFrame:
         return self._stim_df
