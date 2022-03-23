@@ -61,13 +61,13 @@ class FrankDatasetAdapter(MNEDatasetAdapter):
         """
         Load MNE continuous representation.
         """
-        raw_data, run_offsets = {}, {}
+        raw_data, run_ranges = {}, {}
         for subject_id, run_paths in self._eeg_paths.items():
-            raw_data[subject_id], run_offsets[subject_id] = \
+            raw_data[subject_id], run_ranges[subject_id] = \
                 self._load_mne_single_subject(subject_id, run_paths)
 
         self._raw_data = raw_data
-        self._run_offsets = run_offsets
+        self._run_ranges = run_ranges
 
     def _load_mne_single_subject(self, subject_id, run_path) -> Tuple[mne.io.Raw, List[int]]:
         raw = mne.io.read_raw_eeglab(run_path, preload=True,
@@ -90,7 +90,7 @@ class FrankDatasetAdapter(MNEDatasetAdapter):
 
         annotate_given_breaks(raw, presentation_spans)
 
-        return raw, presentation_begins
+        return raw, presentation_spans
 
     def get_presentation_data(self, subject_id) -> pd.DataFrame:
         raw = self._raw_data[subject_id]

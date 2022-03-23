@@ -38,6 +38,14 @@ class BroderickDatasetAdapter(MNEDatasetAdapter):
         self._stim_df["sample_id"] = np.ceil(self._stim_df.onset_time * self.sample_rate).astype(int)
 
         self._load_mne()
+        
+    @property
+    def _run_ranges(self):
+        # Compute from _run_offsets; items are contiguous.
+        return {
+            subject_id: list(zip(run_offsets, run_offsets[1:] + [self._raw_data[subject_id].n_times]))
+            for subject_id, run_offsets in self._run_offsets
+        }
 
     def _prepare_paths(self, eeg_dir):
         eeg_paths = itertools.groupby(sorted(eeg_dir.glob("**/*.mat")),

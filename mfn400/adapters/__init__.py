@@ -37,8 +37,8 @@ class MNEDatasetAdapter(DatasetAdapter):
     Dataset adapter using internal MNE representation.
 
     Multiple runs are concatenated into one single continuous `RawData`
-    MNE representation. `_run_offsets` stores the index of the first sample
-    of each run in this raw data.
+    MNE representation. `_run_ranges` stores range indices corresponding
+    to meaningful item-related signal in the raw data.
     """
 
     word_event_id = 2
@@ -54,10 +54,10 @@ class MNEDatasetAdapter(DatasetAdapter):
     Mapping from subject -> RawData.
     """
 
-    _run_offsets: Optional[Dict[int, List[int]]] = None
+    _run_ranges: Optional[Dict[int, List[Tuple[int, int]]]] = None
     """
-    A list of sample indices (into `_raw_data`) describing the first sample
-    of each run.
+    A list of sample index ranges (into `_raw_data`) with values
+    `[start_sample, end_sample)` (NB end is non-inclusive).
     """
 
     _stim_df: Optional[pd.DataFrame] = None
@@ -90,8 +90,8 @@ class MNEDatasetAdapter(DatasetAdapter):
         return self.stimulus_df.copy()
 
     def _to_erp_single_subject(self, subject_id,
-                              epoch_window: Tuple[float, float],
-                              **preprocessing_kwargs) -> mne.Epochs:
+                               epoch_window: Tuple[float, float],
+                               **preprocessing_kwargs) -> mne.Epochs:
         raw = self._raw_data[subject_id]
         events, event_id = mne.events_from_annotations(raw)
 
@@ -136,12 +136,12 @@ class MNEDatasetAdapter(DatasetAdapter):
         # Write Y data.
         for subject_id, raw_data in self._raw_data.items():
             df = raw_data.to_data_frame(time_format=None)
-            run_offsets = self._run_offsets[subject_id]
+            run_ranges = self._run_ranges[subject_id]
 
             # Undo concatenation into a single raw array, so that each
             # participant-run begins at time t=0.
             run_dfs = [df.loc[start_idx:end_idx] for start_idx, end_idx
-                       in zip(run_offsets, run_offsets[1:] + [len(df)])]
+                       in run_ranges]
             run_dfs = [run_df.assign(time=run_df.time - run_df.time.min())
                        for run_df in run_dfs]
 
