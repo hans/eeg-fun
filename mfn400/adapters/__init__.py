@@ -89,7 +89,7 @@ class MNEDatasetAdapter(DatasetAdapter):
         # By default, assume presentations are the same across subjects.
         return self.stimulus_df.copy()
 
-    def _to_erp_single_subjct(self, subject_id,
+    def _to_erp_single_subject(self, subject_id,
                               epoch_window: Tuple[float, float],
                               **preprocessing_kwargs) -> mne.Epochs:
         raw = self._raw_data[subject_id]
@@ -98,6 +98,7 @@ class MNEDatasetAdapter(DatasetAdapter):
         epoch_tmin, epoch_tmax = epoch_window
         return mne.Epochs(raw, events=events, event_id=event_id,
                           tmin=epoch_tmin, tmax=epoch_tmax,
+                          reject_by_annotation=False,
                           preload=True)
 
     def to_erp(self, epoch_window: Tuple[float, float],
@@ -105,13 +106,14 @@ class MNEDatasetAdapter(DatasetAdapter):
         """
         Prepare the dataset for ERP analysis by epoching.
         """
-
         if not self.preprocessed:
             self.run_preprocessing(**preprocessing_kwargs)
 
-        epochs = {self._to_erp_single_subject(subject_id, epoch_window,
-                                              **preprocessing_kwargs)
-                  for subject_id in self._raw_data}
+        epochs = {
+            subject_id: self._to_erp_single_subject(subject_id, epoch_window,
+                                                    **preprocessing_kwargs)
+            for subject_id in self._raw_data
+        }
         return epochs
 
     def to_cdr(self, x_path, y_path, **preprocessing_kwargs):
@@ -152,3 +154,6 @@ class MNEDatasetAdapter(DatasetAdapter):
 
             df.to_csv(y_path, mode="a", sep=" ", header=header,
                       float_format="%.4f")
+
+            # DEV
+            break

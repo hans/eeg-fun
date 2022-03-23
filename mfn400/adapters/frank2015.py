@@ -18,28 +18,43 @@ info_re = re.compile(r"EEG(\d+)\.set")
 class FrankDatasetAdapter(MNEDatasetAdapter):
     """
     Frank et al. 2015 naturalistic N400 dataset.
+    
+    Data as published is already preprocessed:
+    - 0.05-25Hz band-pass filter
+    - re-referenced to average of left and right mastoid electrodes
+    
+    Channel names follow EasyCap M10 montage.
     """
 
     name = "frank2015"
 
     # acquisition parameters
-    data_channels = ... # [f"V{x}" for x in range(1, 129)]
-    # two mastoid references
-    reference_channels = ...  # ["M1", "M2"]
+    data_channels = ['1', '10', '12', '14', '16', '18', '21', '22', '24', 
+                     '25', '26', '29', '30', '31', '33', '34', '35', '36', 
+                     '37', '38', '39', '40', '41', '42', '44', '45', '46', 
+                     '47', '48', '49', '50', '8']
+    eog_channels = ["VEOG", "HEOG"]
+    montage = "easycap-M10"
     sample_rate = 250
+    filter_window = (0.05, 25.)
 
     def __init__(self, eeg_dir, stim_path):
         eeg_dir = Path(eeg_dir)
         self._prepare_paths(eeg_dir)
 
-        self._stim_df = pd.read_csv(stim_path)
+        self._stim_df = pd.read_csv(stim_path,
+                                    index_col=["sentence_idx", "word_idx"])
 
         self._load_mne()
 
     def _prepare_paths(self, eeg_dir):
         eeg_paths = sorted(eeg_dir.glob("*.set"))
-        eeg_paths = {info_re.match(p.name).group(1).lstrip(0): p
+        eeg_paths = {info_re.match(p.name).group(1).lstrip("0"): p
                      for p in eeg_paths}
+        
+        # DEV
+        eeg_paths = {"1": eeg_paths["1"]}
+        
         self._eeg_paths = eeg_paths
 
     def _load_mne(self):
@@ -55,8 +70,14 @@ class FrankDatasetAdapter(MNEDatasetAdapter):
         self._run_offsets = run_offsets
 
     def _load_mne_single_subject(self, subject_id, run_path) -> Tuple[mne.io.Raw, List[int]]:
-        raw = mne.io.read_raw_eeglab(run_path, preload=True)
-
+        raw = mne.io.read_raw_eeglab(run_path, preload=True,
+                                     eog=self.eog_channels)
+        raw.set_montage(self.montage)
+        
+        # Not sure if it's important to have the existing band-pass filter
+        # information in the MNE info. Probably not.
+        # raw.info["highpass"], raw.info["lowpass"] = self.filter_window
+        
         # Break periods between items are represented in the raw data as NaN
         # data. Detect these and add MNE "BAD" annotations.
         raw_data: np.ndarray = raw.get_data()
@@ -69,14 +90,18 @@ class FrankDatasetAdapter(MNEDatasetAdapter):
 
         annotate_given_breaks(raw, presentation_spans)
 
-        return raw_data, presentation_begins
+        return raw, presentation_begins
 
     def get_presentation_data(self, subject_id) -> pd.DataFrame:
         raw = self._raw_data[subject_id]
         annotations_df = pd.DataFrame({
-            "description": raw.annotations.description.astype(int),
+            "description": raw.annotations.description,
             "onset": raw.annotations.onset
         })
+        
+        # Retain just presentation data (not BAD annotations).
+        annotations_df = annotations_df.loc[~annotations_df.description.str.startswith("BAD")] \
+            .astype({"description": int})
 
         # Compute sentence/word index from funky representation in annotation
         # data.
@@ -103,16 +128,8 @@ class FrankDatasetAdapter(MNEDatasetAdapter):
 
         return ret
 
-    def _preprocess(self, raw_data: mne.io.Raw,
-                    filter_window: Tuple[float, float]) -> mne.io.Raw:
-        # Set reference.
-        # TODO(EEG) is this reference right? just using the average of
-        # bilateral channels
-        raw_data = raw_data.set_eeg_reference(self.reference_channels)
-
-        # Run band-pass filter.
-        raw_data = raw_data.filter(*filter_window)
-
+    def _preprocess(self, raw_data: mne.io.Raw) -> mne.io.Raw:
+        # Signals are already filtered and rereferenced in published data.
         return raw_data
 
     @property
