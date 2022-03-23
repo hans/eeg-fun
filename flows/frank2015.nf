@@ -16,7 +16,11 @@ params.filter_low = 1
 params.filter_high = 8
 
 // CDR parameters
-params.cdr_response_variables = (1..128).collect({"V" + it})
+params.cdr_response_variables = [
+                      '1', '10', '12', '14', '16', '18', '21', '22', '24',
+                     '25', '26', '29', '30', '31', '33', '34', '35', '36',
+                     '37', '38', '39', '40', '41', '42', '44', '45', '46',
+                     '47', '48', '49', '50', '8']
 params.cdr_predictor_variables = ["surprisal"]
 params.cdr_series_ids = "item subject"
 
@@ -69,9 +73,7 @@ os.environ["NUMBA_CACHE_DIR"] = "/tmp"
 from mfn400.adapters.frank2015 import FrankDatasetAdapter
 
 dataset = FrankDatasetAdapter("${eeg_dir}", "${stim_df}")
-dataset.to_cdr("X.txt", "y.txt",
-               filter_window=(${params.filter_low},
-                              ${params.filter_high}))
+dataset.to_cdr("X.txt", "y.txt")
 """
 }
 

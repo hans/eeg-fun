@@ -85,6 +85,8 @@ class MNEDatasetAdapter(DatasetAdapter):
     def get_presentation_data(self, subject_id) -> pd.DataFrame:
         """
         Return a dataframe describing presentation to `subject_id`.
+        
+        Should minimally contain columns `item` and `onset_time`.
         """
         # By default, assume presentations are the same across subjects.
         return self.stimulus_df.copy()
@@ -128,7 +130,7 @@ class MNEDatasetAdapter(DatasetAdapter):
         # Write X data.
         X_df = pd.concat({subject_idx: self.get_presentation_data(subject_idx)
                           for subject_idx in self._raw_data.keys()},
-                         names=["subject"])
+                         names=["subject", "index"])
         # Set expected CDR `time` column
         X_df["time"] = X_df["onset_time"]
         X_df.to_csv(x_path, sep=" ")

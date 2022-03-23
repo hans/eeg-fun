@@ -42,8 +42,8 @@ class FrankDatasetAdapter(MNEDatasetAdapter):
         eeg_dir = Path(eeg_dir)
         self._prepare_paths(eeg_dir)
 
-        self._stim_df = pd.read_csv(stim_path,
-                                    index_col=["sentence_idx", "word_idx"])
+        self._stim_df = pd.read_csv(stim_path, index_col=0) \
+            .set_index(["sentence_idx", "word_idx"])
 
         self._load_mne()
 
@@ -124,7 +124,9 @@ class FrankDatasetAdapter(MNEDatasetAdapter):
 
         ret = pd.merge(annotations_df, self.stimulus_df,
                        left_on=["sentence_idx", "word_idx"], right_index=True) \
-            .rename(dict(onset="time"))
+            .rename(columns=dict(onset="onset_time"))
+        
+        ret["item"] = ret["sentence_idx"]
 
         return ret
 
