@@ -1,4 +1,5 @@
 import itertools
+import logging
 from pathlib import Path
 import re
 from typing import Optional, Tuple, List, Dict
@@ -51,9 +52,6 @@ class FrankDatasetAdapter(MNEDatasetAdapter):
         eeg_paths = sorted(eeg_dir.glob("*.set"))
         eeg_paths = {info_re.match(p.name).group(1).lstrip("0"): p
                      for p in eeg_paths}
-        
-        # DEV
-        eeg_paths = {"1": eeg_paths["1"]}
         
         self._eeg_paths = eeg_paths
 
@@ -119,6 +117,17 @@ class FrankDatasetAdapter(MNEDatasetAdapter):
         annotations_df.loc[annotations_df.description > 50, "sentence_idx"] = \
             annotations_df.description - 50
         annotations_df["sentence_idx"] = annotations_df.sentence_idx.fillna(method="ffill")
+
+        # Some annotations have leading words before a sentence marker. Don't
+        # know what happened in the data here .. but let's just drop these
+        # rows.
+        na_sentences = annotations_df.sentence_idx.isna().sum()
+        if na_sentences > 0:
+            logging.warn(f"Subject {subject_id} had {na_sentences} "
+                          "word annotations with no sentence identifier. "
+                          "Ignoring.")
+            annotations_df = annotations_df.dropna()
+
         annotations_df = annotations_df.astype({"word_idx": int, "sentence_idx": int}) \
             .drop(columns=["description"])
 
