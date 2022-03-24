@@ -18,18 +18,27 @@ glimpse(df)
 
 ```{r}
 # NB removed interaction of frequency * length from random effects to get convergence
-base_model = lmer(our_N400 ~ logwordfreq * wordlength + (1 | sentence_idx) + (logwordfreq + wordlength | subject_idx),
+base_model = lmer(our_N400 ~ logwordfreq * wordlength + our_baseline + (1 | sentence_idx) + (logwordfreq + wordlength | subject_idx),
                   control=lmerControl(optimizer="bobyqa", optCtrl=list(maxfun=100000)),
                   data=df %>% filter(!artefact, !reject))
 summary(base_model)
+```
 
-model = lmer(our_N400 ~ surp_ngram_order_3 + logwordfreq * wordlength + (1 | sentence_idx) + (logwordfreq + wordlength + surp_ngram_order_3 | subject_idx),
+```{r}
+model_their_surprisals = lmer(our_N400 ~ surp_ngram_order_3 + logwordfreq * wordlength + our_baseline + (1 | sentence_idx) + (logwordfreq + wordlength + surp_ngram_order_3 | subject_idx),
+             control=lmerControl(optimizer="bobyqa", optCtrl=list(maxfun=100000)),
+             data=df %>% filter(!artefact, !reject))
+summary(model_their_surprisals)
+```
+
+```{r}
+model = lmer(our_N400 ~ surprisal + logwordfreq * wordlength + our_baseline + (1 | sentence_idx) + (logwordfreq + wordlength + surprisal | subject_idx),
              control=lmerControl(optimizer="bobyqa", optCtrl=list(maxfun=100000)),
              data=df %>% filter(!artefact, !reject))
 summary(model)
 ```
 
 ```{r}
-anova(model, base_model, refit=FALSE)
+anova(model_their_surprisals, base_model, refit=FALSE)
 ```
 
