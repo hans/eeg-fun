@@ -93,6 +93,7 @@ class MNEDatasetAdapter(DatasetAdapter):
 
     def _to_erp_single_subject(self, subject_id,
                                epoch_window: Tuple[float, float],
+                               baseline,
                                **preprocessing_kwargs) -> mne.Epochs:
         raw = self._raw_data[subject_id]
         events, event_id = mne.events_from_annotations(raw)
@@ -101,9 +102,11 @@ class MNEDatasetAdapter(DatasetAdapter):
         return mne.Epochs(raw, events=events, event_id=event_id,
                           tmin=epoch_tmin, tmax=epoch_tmax,
                           reject_by_annotation=False,
-                          preload=True)
+                          preload=True, baseline=baseline,
+                          verbose=False)
 
     def to_erp(self, epoch_window: Tuple[float, float],
+               baseline=(None, 0),
                **preprocessing_kwargs) -> Dict[int, mne.Epochs]:
         """
         Prepare the dataset for ERP analysis by epoching.
@@ -113,6 +116,7 @@ class MNEDatasetAdapter(DatasetAdapter):
 
         epochs = {
             subject_id: self._to_erp_single_subject(subject_id, epoch_window,
+                                                    baseline=baseline,
                                                     **preprocessing_kwargs)
             for subject_id in self._raw_data
         }

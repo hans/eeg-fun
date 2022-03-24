@@ -136,6 +136,7 @@ class BroderickDatasetAdapter(MNEDatasetAdapter):
 
     def _to_erp_single_subject(self, subject_id,
                                epoch_window: Tuple[float, float],
+                               baseline,
                                **preprocessing_kwargs) -> mne.Epochs:
         # Prepare an MNE event-matrix representation with one event per
         # word onset.
@@ -143,7 +144,8 @@ class BroderickDatasetAdapter(MNEDatasetAdapter):
 
         epoch_tmin, epoch_tmax = epoch_window
         return mne.Epochs(self._raw_data[subject_id], events_seq, preload=True,
-                          tmin=epoch_tmin, tmax=epoch_tmax)
+                          tmin=epoch_tmin, tmax=epoch_tmax,
+                          baseline=baseline)
 
     @property
     def stimulus_df(self) -> pd.DataFrame:
