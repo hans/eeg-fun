@@ -118,20 +118,20 @@ class FrankDatasetAdapter(MNEDatasetAdapter):
             annotations_df.description - 50
         annotations_df["sentence_idx"] = annotations_df.sentence_idx.fillna(method="ffill")
 
-        # Some annotations have leading words before a sentence marker. Don't
-        # know what happened in the data here .. but let's just drop these
-        # rows.
+        # Some subjects have leading words before a sentence marker. Don't
+        # know what happened in the data here .. but let's just mark these
+        # rows as bad.
         na_sentences = annotations_df.sentence_idx.isna().sum()
         if na_sentences > 0:
             logging.warn(f"Subject {subject_id} had {na_sentences} "
                           "word annotations with no sentence identifier. "
-                          "Ignoring.")
-            annotations_df = annotations_df.dropna()
+                          "Setting sentence_idx = -1, make sure to ignore.")
+            annotations_df.loc[annotations_df.sentence_idx.isna(), "sentence_idx"] = -1
 
         annotations_df = annotations_df.astype({"word_idx": int, "sentence_idx": int}) \
             .drop(columns=["description"])
 
-        ret = pd.merge(annotations_df, self.stimulus_df,
+        ret = pd.merge(annotations_df, self.stimulus_df, how="left",
                        left_on=["sentence_idx", "word_idx"], right_index=True) \
             .rename(columns=dict(onset="onset_time"))
         
