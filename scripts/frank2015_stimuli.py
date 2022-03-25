@@ -104,7 +104,7 @@ def main(args):
 
     stim_df = pd.concat(
         [pd.DataFrame({"word": sent}) for sent in sentences],
-        keys=np.arange(len(sentences)) + 1,
+        keys=np.arange(len(sentences)),
         names=["sentence_idx", "word_idx"]
     )
 
@@ -119,6 +119,11 @@ def main(args):
                        how="left",
                        left_on=["sentence_idx", "word_idx"],
                        right_index=True)
+
+    # 1-index sentences.
+    stim_df = stim_df.reset_index()
+    stim_df["sentence_idx"] += 1
+    stim_df = stim_df.set_index(["sentence_idx", "word_idx"])
 
     add_control_predictors(stim_df, sentences)
 
