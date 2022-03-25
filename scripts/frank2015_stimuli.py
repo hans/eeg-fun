@@ -64,9 +64,21 @@ def compute_surprisals(sentences: List[List[str]], model="gpt2"):
         token_surps = surps_shifted[range(surps_shifted.shape[0]), sent_tokens_shifted]
 
         word_ids = batch_encoding.word_ids(sent_idx)
-        for tok_id, surp in enumerate(token_surps):
+        for idx, surp in enumerate(token_surps):
+            # We are enumerating the shifted list. Get the original token
+            # index.
+            tok_id = idx + 1
+            
             if word_ids[tok_id] is None:
                 continue
+            elif word_ids[tok_id] >= len(sentences[sent_idx]):
+                # Word ID is out-of-bounds. This shouldn't happen. But
+                # sometimes it does, because Huggingface tokenizer imputes a
+                # different notion of "word" than what is in the pre-tokenized
+                # input sentence. See comment in `get_predictive_outputs` for
+                # a fix, if you really care about sentence-final surprisals.
+                continue
+                
             surp_mapping.append((global_tok_cursor + word_ids[tok_id],
                                  sent_idx, word_ids[tok_id], tok_id, surp))
 

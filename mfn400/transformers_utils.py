@@ -24,6 +24,10 @@ def get_predictive_outputs(model: transformers.PreTrainedModel,
     tokenized = tokenizer.batch_encode_plus(
         [" ".join(sentence) for sentence in sentences],
         add_special_tokens=True, return_offsets_mapping=True)
+    
+    # NB doesn't always handle sentence-final punctuation correctly -- is
+    # mapped onto a separate word_id.
+    # In principle, we should tokenize with `is_split_into_words=True`.
 
     ret = []
     for sent_idx, sentence in enumerate(sentences):
