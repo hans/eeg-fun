@@ -96,6 +96,42 @@ dataset.to_cdr("X.txt", "y.txt")
 """
 }
 
+/**
+ * Average across electrodes of interest.
+ */
+process simplifyCDR {
+    label "mne"
+    
+    when:
+    params.mode == "cdr"
+    
+    input:
+    tuple file(X), file(y) from CDR_data
+    
+    output:
+    tuple file("X_simp.txt"), file("y_simp.txt") into CDR_data_simple
+    
+    script:
+    
+    electrodes_arr = "[" + params.cdr_response_variables.join(",") + "]"
+"""
+#!/usr/bin/env python
+
+import pandas as pd
+
+ELECTRODES = ${electrodes_arr}
+ELECTRODES = [str(el) for el in ELECTRODES]
+
+X = pd.read_csv("${X}", sep=" ")
+X.to_csv("X_simp.txt", sep=" ", index=False)
+
+y = pd.read_csv("${y}", sep=" ")
+y["mean_response"] = y[ELECTRODES].mean(axis=1)
+y = y.drop(columns=ELECTRODES)
+y.to_csv("y_simp.txt", sep=" ", index=False)
+"""
+}
+
 process runCDR {
     label "cdr"
     publishDir "${params.outdir}"
@@ -104,10 +140,10 @@ process runCDR {
     params.mode == "cdr"
 
     input:
-    tuple file(X), file(y) from CDR_data
+    tuple file(X), file(y) from CDR_data_simple
 
     script:
-    response_expr = params.cdr_response_variables.join(" + ")
+    response_expr = "mean_response"  // params.cdr_response_variables.join(" + ")
     predictor_expr = params.cdr_predictor_variables.join(" + ")
     formula = "${response_expr} ~ C(${predictor_expr}, NN())"
 
