@@ -43,8 +43,8 @@ class FrankDatasetAdapter(MNEDatasetAdapter):
         eeg_dir = Path(eeg_dir)
         self._prepare_paths(eeg_dir)
 
-        self._stim_df = pd.read_csv(stim_path, index_col=0) \
-            .set_index(["sentence_idx", "word_idx"])
+        self._stim_df = pd.read_csv(stim_path,
+                                    index_col=["sentence_idx", "word_idx"])
 
         self._load_mne()
 
