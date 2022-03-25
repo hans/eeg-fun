@@ -39,6 +39,6 @@ summary(model)
 ```
 
 ```{r}
-anova(model_their_surprisals, base_model, refit=FALSE)
+anova(model, base_model, refit=FALSE)
 ```
 
