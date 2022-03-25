@@ -1,6 +1,8 @@
 ---
 title: "R Notebook"
 output: html_notebook
+args:
+  file: "../output/frank_erp_n400-repro.csv"
 ---
 
 ```{r}
@@ -11,7 +13,7 @@ library(broom.mixed)
 ```
 
 ```{r}
-df <- read_csv("../output/frank_erp_n400-repro.csv")
+df <- read_csv(params$file)
 glimpse(df)
 ```
 

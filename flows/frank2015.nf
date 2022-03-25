@@ -11,9 +11,16 @@ stim_file = Channel.fromPath(params.data_dir + "/stimuli_erp.mat")
 params.language_model = "EleutherAI/gpt-neo-125M"
 params.transformers_cache = "${baseDir}/transformers_cache"
 
-// EEG processing parameters
-params.filter_low = 1
-params.filter_high = 8
+/**
+ * Specify the analysis to carry out. One of "erp", "cdr"
+ */
+params.mode = "cdr"
+
+// ERP parameters
+params.erp_epoch_window_left = -0.1
+params.erp_epoch_window_right = 0.924
+params.erp_test_window_left = 0.3
+params.erp_test_window_right = 0.5
 
 // CDR parameters
 params.cdr_response_variables = [
@@ -27,6 +34,13 @@ params.cdr_series_ids = "item subject"
 /////////
 
 params.outdir = "${baseDir}/output/frank2015"
+
+/////////
+
+// Duplicate channels for the two processing streams
+eeg_dir.into { eeg_dir_for_erp; eeg_dir_for_cdr }
+
+/////////
 
 process prepareStimuli {
     label "mne"
@@ -50,12 +64,17 @@ TRANSFORMERS_CACHE=${params.transformers_cache} python \
 """
 }
 
+stim_df.into { stim_df_for_erp; stim_df_for_cdr }
+
 process prepareCDR {
     label "mne"
+    
+    when:
+    params.mode == "cdr"
 
     input:
-    file eeg_dir from eeg_dir
-    file stim_df from stim_df
+    file eeg_dir from eeg_dir_for_cdr
+    file stim_df from stim_df_for_cdr
 
     output:
     tuple file("X.txt"), file("y.txt") into CDR_data
@@ -80,6 +99,9 @@ dataset.to_cdr("X.txt", "y.txt")
 process runCDR {
     label "cdr"
     publishDir "${params.outdir}"
+    
+    when:
+    params.mode == "cdr"
 
     input:
     tuple file(X), file(y) from CDR_data
@@ -101,5 +123,58 @@ export formula="${formula}"
 envsubst < ${baseDir}/cdr_config_template.ini > cdr.ini
 
 python -m cdr.bin.train cdr.ini
+"""
+}
+
+process prepareERP {
+    label "mne"
+    
+    when:
+    params.mode == "erp"
+    
+    input:
+    file eeg_dir from eeg_dir_for_erp
+    file stim_df from stim_df_for_erp
+    
+    output:
+    file "erp.csv" into erp_df
+    
+    script:
+"""
+#!/usr/bin/env python
+
+import sys
+sys.path.append("${baseDir}")
+
+from mfn400.adapters.frank2015 import FrankDatasetAdapter
+from mfn400.n400 import prepare_erp_df
+
+data = FrankDatasetAdapter("${eeg_dir}", "${stim_df}")
+epochs = data.to_erp((${params.erp_epoch_window_left}, ${params.erp_epoch_window_right}),
+                     baseline=None)
+                     
+# TODO finish / put into script
+"""
+}
+
+process runERP {
+    label "r"
+    publishDir "${params.outdir}/erp"
+    
+    when:
+    params.mode == "erp"
+    
+    input:
+    file erp_df from erp_df
+    
+    output:
+    file "Naturalistic-N400-Frank.nb.html"
+    
+    script:
+"""
+#!/usr/bin/env bash
+
+cd ${baseDir}/notebooks
+Rscript -e "rmarkdown::render('Naturalistic N400 Frank.Rmd', params=list(file='${erp_df}'))"
 """
 }
