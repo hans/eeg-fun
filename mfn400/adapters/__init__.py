@@ -96,7 +96,7 @@ class MNEDatasetAdapter(DatasetAdapter):
                                baseline,
                                **preprocessing_kwargs) -> mne.Epochs:
         raw = self._raw_data[subject_id]
-        events, event_id = mne.events_from_annotations(raw)
+        events, event_id = mne.events_from_annotations(raw, verbose=False)
 
         epoch_tmin, epoch_tmax = epoch_window
         return mne.Epochs(raw, events=events, event_id=event_id,
