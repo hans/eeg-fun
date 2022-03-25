@@ -5,6 +5,8 @@ import mne
 import numpy as np
 import pandas as pd
 
+from mfn400.n400 import prepare_erp_df
+
 
 class DatasetAdapter(object):
     """
@@ -25,9 +27,22 @@ class DatasetAdapter(object):
         """
         raise NotImplementedError()
 
-    def to_erp(self, epoch_window: Tuple[float, float]) -> Dict[int, mne.Epochs]:
+    def to_erp(self,
+               epoch_window: Tuple[float, float],
+               test_window: Tuple[float, float],
+               baseline_window: Tuple[Optional[float], float] = (None, 0),
+               apply_baseline=True) -> pd.DataFrame:
         """
-        Prepare the dataset for ERP analysis by epoching.
+        Prepare a dataset for ERP analysis.
+        
+        Args:
+            epoch_window: Time window around each event to retain in epochs.
+            test_window: Time window over which to average signal measure.
+            baseline_window: Time window over which to calculate baseline.
+            apply_baseline: If `True`, baseline measure will be subtracted
+                from test measure in the resulting dataframe. If `False`, for
+                each channel `x` in the dataframe an extra column `x_baseline`
+                will also be returned, containing the baseline value.
         """
         raise NotImplementedError()
 
@@ -91,10 +106,10 @@ class MNEDatasetAdapter(DatasetAdapter):
         # By default, assume presentations are the same across subjects.
         return self.stimulus_df.copy()
 
-    def _to_erp_single_subject(self, subject_id,
-                               epoch_window: Tuple[float, float],
-                               baseline,
-                               **preprocessing_kwargs) -> mne.Epochs:
+    def _to_epochs_single_subject(self, subject_id,
+                                  epoch_window: Tuple[float, float],
+                                  baseline,
+                                  **preprocessing_kwargs) -> mne.Epochs:
         raw = self._raw_data[subject_id]
         events, event_id = mne.events_from_annotations(raw, verbose=False)
 
@@ -105,22 +120,56 @@ class MNEDatasetAdapter(DatasetAdapter):
                           preload=True, baseline=baseline,
                           verbose=False)
 
-    def to_erp(self, epoch_window: Tuple[float, float],
-               baseline=(None, 0),
-               **preprocessing_kwargs) -> Dict[int, mne.Epochs]:
+    def to_epochs(self, epoch_window: Tuple[float, float],
+                  baseline=(None, 0),
+                  **preprocessing_kwargs) -> Dict[int, mne.Epochs]:
         """
-        Prepare the dataset for ERP analysis by epoching.
+        Prepare epoched dataset.
         """
         if not self.preprocessed:
             self.run_preprocessing(**preprocessing_kwargs)
 
         epochs = {
-            subject_id: self._to_erp_single_subject(subject_id, epoch_window,
-                                                    baseline=baseline,
-                                                    **preprocessing_kwargs)
+            subject_id: self._to_epochs_single_subject(
+                subject_id, epoch_window, baseline=baseline,
+                **preprocessing_kwargs)
             for subject_id in self._raw_data
         }
         return epochs
+    
+    def to_erp(self,
+               epoch_window: Tuple[float, float],
+               test_window: Tuple[float, float],
+               baseline_window: Tuple[Optional[float], float] = (None, 0),
+               apply_baseline=True,
+               **preprocessing_kwargs) -> pd.DataFrame:
+        """
+        Prepare a dataset for ERP analysis.
+        
+        Args:
+            epoch_window: Time window around each event to retain in epochs.
+            test_window: Time window over which to average signal measure.
+            baseline_window: Time window over which to calculate baseline.
+            apply_baseline: If `True`, baseline measure will be subtracted
+                from test measure in the resulting dataframe. If `False`, for
+                each channel `x` in the dataframe an extra column `x_baseline`
+                will also be returned, containing the baseline value.
+        """
+        # If we are not applying baseline, ask MNE to epoch without awareness
+        # of baseline.
+        epoch_baseline = baseline_window if apply_baseline else None
+        epochs = self.to_epochs(epoch_window, epoch_baseline,
+                                **preprocessing_kwargs)
+        return pd.concat(
+            [prepare_erp_df(epochs[subject],
+                            self.get_presentation_data(subject),
+                            test_window=test_window,
+                            apply_baseline=apply_baseline,
+                            baseline=baseline_window)
+             for subject in epochs],
+            names=["subject_idx"],
+            keys=[int(idx) for idx in epochs.keys()]
+        )
 
     def to_cdr(self, x_path, y_path, **preprocessing_kwargs):
         """

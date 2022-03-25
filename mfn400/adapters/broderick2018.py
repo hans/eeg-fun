@@ -134,10 +134,10 @@ class BroderickDatasetAdapter(MNEDatasetAdapter):
 
         return np.concatenate(events_arr)
 
-    def _to_erp_single_subject(self, subject_id,
-                               epoch_window: Tuple[float, float],
-                               baseline,
-                               **preprocessing_kwargs) -> mne.Epochs:
+    def _to_epochs_single_subject(self, subject_id,
+                                  epoch_window: Tuple[float, float],
+                                  baseline,
+                                  **preprocessing_kwargs) -> mne.Epochs:
         # Prepare an MNE event-matrix representation with one event per
         # word onset.
         events_seq = self._prepare_events_seq(subject_id)
