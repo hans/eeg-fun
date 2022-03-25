@@ -50,7 +50,6 @@ def add_word_freqs(stim_df, freqs_data):
 
 def main(args):
     sentences = load_stimuli(args.stim_path)
-    surp_mapping = compute_surprisals(sentences, model=args.model)
 
     stim_df = pd.concat(
         [pd.DataFrame({"word": sent}) for sent in sentences],
