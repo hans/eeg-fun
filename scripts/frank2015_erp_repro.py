@@ -63,7 +63,7 @@ def main(args):
     our_baseline_df = erp_df.reset_index().set_index(["subject_idx", "sentence_idx", "word_idx"]) \
         .loc[:, [f"{el}_baseline" for el in N400_ELECTRODES]].mean(axis=1).rename("our_baseline")
 
-    merged_df = sanity_check_and_merge(erp_df, args.reference_erp_path)
+    merged_df = sanity_check_and_merge(our_erp_df, our_baseline_df, args.reference_erp_path)
     merged_df.to_csv(args.out_path)
 
 
@@ -76,3 +76,5 @@ if __name__ == "__main__":
     p.add_argument("-r", "--reference_erp_path", type=Path, required=True,
                    help=("Path to output of frank2015_erp_premade.py for "
                          "sanity checking derived N400 values."))
+
+    main(p.parse_args())

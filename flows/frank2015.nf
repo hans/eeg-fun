@@ -195,6 +195,7 @@ python ${baseDir}/scripts/frank2015_erp_premade.py \
 
 process prepareERP {
     label "mne"
+    publishDir "${params.outdir}/erp"
 
     when:
     params.mode == "erp"
@@ -205,18 +206,22 @@ process prepareERP {
     file erp_control_df from erp_control_df
 
     output:
-    file "erp.csv" into erp_df
+    file "erp_full.csv" into erp_df
+    file "n400_comparison.png"
 
     script:
 """
 #!/usr/bin/env bash
+
+export PYTHONPATH="${baseDir}"
+export NUMBA_CACHE_DIR=/tmp
 
 # TODO pass epoching etc. parameters
 
 python ${baseDir}/scripts/frank2015_erp_repro.py \
     ${eeg_dir} ${stim_df} \
     -r ${erp_control_df} \
-    -o erp.csv
+    -o erp_full.csv
 """
 }
 
@@ -237,7 +242,7 @@ process runERP {
 """
 #!/usr/bin/env bash
 
-cd ${baseDir}/notebooks
-Rscript -e "rmarkdown::render('Naturalistic N400 Frank.Rmd', params=list(file='${erp_df}'))"
+#cd ${baseDir}/notebooks
+Rscript -e "rmarkdown::render('${baseDir}/notebooks/Naturalistic N400 Frank.Rmd', params=list(file='${erp_df}'))"
 """
 }

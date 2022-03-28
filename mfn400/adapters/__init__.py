@@ -165,7 +165,8 @@ class MNEDatasetAdapter(DatasetAdapter):
                             self.get_presentation_data(subject),
                             test_window=test_window,
                             apply_baseline=apply_baseline,
-                            baseline=baseline_window)
+                            baseline=baseline_window) \
+             .drop(columns=["subject_idx"], errors="ignore")
              for subject in epochs],
             names=["subject_idx"],
             keys=[int(idx) for idx in epochs.keys()]
