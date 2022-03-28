@@ -22,8 +22,7 @@ SUBJECT_6_MISSING_SENTENCES = [ 27, 173, 171, 145, 147,  39,
 """
 Sentences (1-based index) missing from EEG recording of subject 6, even
 after merging the two parts stored separately. These IDs are still present
-in the e.g. stimulus data of subject 6, which is problematic. So we'll
-reach in and remove them manually.
+in the e.g. stimulus data of subject 6, which is problematic.
 """
 
 
@@ -71,18 +70,12 @@ class FrankDatasetAdapter(MNEDatasetAdapter):
         """
         Load MNE continuous representation.
         """
-        raw_data, run_ranges = {}, {}
+        self._raw_data, self._run_ranges = {}, {}
         for subject_id, run_paths in self._eeg_paths.items():
-            # DEV
-            if subject_id != "6":
-                continue
-
-            raw_data[subject_id], presentation_spans = \
+            self._raw_data[subject_id], presentation_spans = \
                 self._load_mne_single_subject(subject_id, run_paths)
-            run_ranges[subject_id] = self._prepare_run_ranges(subject_id)
-
-        self._raw_data = raw_data
-        self._run_ranges = run_ranges
+            self._run_ranges[subject_id] = \
+                self._prepare_run_ranges(subject_id, presentation_spans)
 
     def _load_mne_single_subject(self, subject_id, run_path) -> Tuple[mne.io.Raw, List[int]]:
         kwargs = dict(eog=self.eog_channels, preload=True)
@@ -119,6 +112,20 @@ class FrankDatasetAdapter(MNEDatasetAdapter):
         from annotated raw data and the data regions `presentation_spans`
         as returned by `_load_mne_single_subject`.
         """
+        
+        # Subject 6 has data at the 151st trial but no corresponding 
+        # annotations. Drop this data region.
+        # (We verified this was the right move by comparing the onset time
+        # of each item after the removal to the time of the first word 
+        # annotation in the raw data annotations. This was 0.104 for all
+        # items.)
+        if subject_id == "6":
+            presentation_spans = np.concatenate(
+                [presentation_spans[:150, :],
+                 presentation_spans[151:, :]],
+                axis=0
+            )
+        
         # `presentation_spans` above is following the order of presentation to
         # subject. Map this back to item idx.
         span_df = pd.DataFrame(
@@ -126,6 +133,20 @@ class FrankDatasetAdapter(MNEDatasetAdapter):
             columns=["start_sample", "end_sample"])
 
         sentence_idxs = self._get_sentence_presentation_order(subject_id)
+        
+        # DEV: Code for checking match between item sample boundaries as 
+        # determined by directly analyzing signal (in `span_df`) and item
+        # sample boundaries as determined by existing annotations.
+        #
+        # df1 = (span_df.start_sample / self.sample_rate)
+        # annotations_df = self._get_annotations_df(subject_id)
+        # annotations_df = annotations_df[annotations_df.sentence_idx != -1]
+        # df2 = annotations_df.groupby("sentence_idx", sort=False).onset.agg(onset="min").reset_index()
+        # dfx = pd.concat([df1, df2], axis=1)
+        # dfx["onset_diff"] = dfx.onset - dfx.start_sample
+        # 
+        # ^ verify that onset_diff is always .104 for all items. looks good.
+    
         assert len(sentence_idxs) == len(span_df)
 
         span_df["sentence_idx"] = sentence_idxs
@@ -146,7 +167,7 @@ class FrankDatasetAdapter(MNEDatasetAdapter):
         })
 
         # Retain just presentation data (not BAD annotations).
-        annotations_df = annotations_df.loc[~annotations_df.description.str.startswith("BAD")] \
+        annotations_df = annotations_df.loc[~annotations_df.description.str.startswith(("BAD", "EDGE"))] \
             .astype({"description": int})
 
         # Compute sentence/word index from funky representation in annotation
@@ -180,7 +201,7 @@ class FrankDatasetAdapter(MNEDatasetAdapter):
 
         annotations_df = annotations_df.astype({"word_idx": int, "sentence_idx": int}) \
             .drop(columns=["description"])
-        annotations_df["subject_idx"] = subject_id
+        annotations_df["subject_idx"] = int(subject_id)
 
         return annotations_df
 
@@ -315,14 +336,4 @@ def read_two_part(path, **kwargs):
     with monkeypatched(mne.io.eeglab.eeglab, "_check_load_mat", monkey_loader):
         part2 = mne.io.read_raw_eeglab(path, **kwargs)
 
-    ret = mne.concatenate_raws([part1, part2])
-
-    sentence_ids = ret.annotations.description
-    sentence_ids = sentence_ids[sentence_ids != "BAD boundary"]
-    sentence_ids = sentence_ids[sentence_ids != "EDGE boundary"]
-    sentence_ids = sentence_ids.astype(int)
-    sentence_ids = sentence_ids[sentence_ids > 50] - 50
-    print(sentence_ids)
-    print(len(sentence_ids))
-
-    return ret
+    return mne.concatenate_raws([part1, part2])

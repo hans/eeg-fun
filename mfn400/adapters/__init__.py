@@ -196,11 +196,7 @@ class MNEDatasetAdapter(DatasetAdapter):
             df = raw_data.to_data_frame(time_format=None)
             run_ranges = self._run_ranges[subject_id]
 
-            # Undo concatenation into a single raw array, so that each
-            # participant-run begins at time t=0.
-            #
-            # TODO This isn't wrong -- samples don't necessarily begin at t=0.
-            # Should subtract highest time of preceding item
+            # Split signal segments by item.
             run_dfs = {item_idx: df.loc[start_idx:end_idx]
                        for item_idx, (start_idx, end_idx)
                        in run_ranges.items()}
