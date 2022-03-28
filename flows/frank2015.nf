@@ -68,7 +68,7 @@ stim_df.into { stim_df_for_erp; stim_df_for_cdr }
 
 process prepareCDR {
     label "mne"
-    
+
     when:
     params.mode == "cdr"
 
@@ -101,18 +101,18 @@ dataset.to_cdr("X.txt", "y.txt")
  */
 process simplifyCDR {
     label "mne"
-    
+
     when:
     params.mode == "cdr"
-    
+
     input:
     tuple file(X), file(y) from CDR_data
-    
+
     output:
     tuple file("X_simp.txt"), file("y_simp.txt") into CDR_data_simple
-    
+
     script:
-    
+
     electrodes_arr = "[" + params.cdr_response_variables.join(",") + "]"
 """
 #!/usr/bin/env python
@@ -123,19 +123,28 @@ ELECTRODES = ${electrodes_arr}
 ELECTRODES = [str(el) for el in ELECTRODES]
 
 X = pd.read_csv("${X}", sep=" ")
-X.to_csv("X_simp.txt", sep=" ", index=False)
 
 y = pd.read_csv("${y}", sep=" ")
 y["mean_response"] = y[ELECTRODES].mean(axis=1)
 y = y.drop(columns=ELECTRODES)
-y.to_csv("y_simp.txt", sep=" ", index=False)
+
+# Zero out clock at the start of each item.
+item_times = pd.DataFrame(X.groupby("item").time.min())
+item_times["y_time"] = y.groupby("item").time.min()
+item_times["min_time"] = item_times.min(axis=1)
+X.time -= X.merge(item_times, how="left", left_on="item", right_index=True).min_time
+y.time -= y.merge(item_times, how="left", left_on="item", right_index=True).min_time
+
+X.to_csv("X_simp.txt", sep=" ", index=False)
+y.to_csv("y_simp.txt", sep=" ", index=False,
+         float_format="%.4f")
 """
 }
 
 process runCDR {
     label "cdr"
     publishDir "${params.outdir}"
-    
+
     when:
     params.mode == "cdr"
 
@@ -164,17 +173,17 @@ python -m cdr.bin.train cdr.ini
 
 process prepareERP {
     label "mne"
-    
+
     when:
     params.mode == "erp"
-    
+
     input:
     file eeg_dir from eeg_dir_for_erp
     file stim_df from stim_df_for_erp
-    
+
     output:
     file "erp.csv" into erp_df
-    
+
     script:
 """
 #!/usr/bin/env python
@@ -188,7 +197,7 @@ from mfn400.n400 import prepare_erp_df
 data = FrankDatasetAdapter("${eeg_dir}", "${stim_df}")
 epochs = data.to_erp((${params.erp_epoch_window_left}, ${params.erp_epoch_window_right}),
                      baseline=None)
-                     
+
 # TODO finish / put into script
 """
 }
@@ -196,16 +205,16 @@ epochs = data.to_erp((${params.erp_epoch_window_left}, ${params.erp_epoch_window
 process runERP {
     label "r"
     publishDir "${params.outdir}/erp"
-    
+
     when:
     params.mode == "erp"
-    
+
     input:
     file erp_df from erp_df
-    
+
     output:
     file "Naturalistic-N400-Frank.nb.html"
-    
+
     script:
 """
 #!/usr/bin/env bash
