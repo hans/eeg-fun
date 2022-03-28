@@ -25,6 +25,23 @@ after merging the two parts stored separately. These IDs are still present
 in the e.g. stimulus data of subject 6, which is problematic.
 """
 
+DROP_REGIONS = {
+    "6": [150],
+    "8": [31],
+    "10": [77],
+    "14": [0],
+    "17": [52],
+    "20": [0],
+}
+"""
+Some subjects have regions of signal data without corresponding sentence
+annotations. This metadata is stored here (designating 0-based region index in 
+raw signal) and applied in `_prepare_run_ranges`.
+
+See information in test suite `test_item_onset_agreement` for why this was
+done.
+"""
+
 
 class FrankDatasetAdapter(MNEDatasetAdapter):
     """
@@ -113,18 +130,12 @@ class FrankDatasetAdapter(MNEDatasetAdapter):
         as returned by `_load_mne_single_subject`.
         """
         
-        # Subject 6 has data at the 151st trial but no corresponding 
-        # annotations. Drop this data region.
-        # (We verified this was the right move by comparing the onset time
-        # of each item after the removal to the time of the first word 
-        # annotation in the raw data annotations. This was 0.104 for all
-        # items.)
-        if subject_id == "6":
-            presentation_spans = np.concatenate(
-                [presentation_spans[:150, :],
-                 presentation_spans[151:, :]],
-                axis=0
-            )
+        # Some subjects have data regions missing annotations. This causes
+        # alignment issues downstream. So we'll drop these regions from
+        # `presentation_spans` before it becomes an issue.
+        if subject_id in DROP_REGIONS:
+            presentation_spans = np.delete(
+                presentation_spans, DROP_REGIONS[subject_id], axis=0)
         
         # `presentation_spans` above is following the order of presentation to
         # subject. Map this back to item idx.
@@ -144,10 +155,11 @@ class FrankDatasetAdapter(MNEDatasetAdapter):
         # df2 = annotations_df.groupby("sentence_idx", sort=False).onset.agg(onset="min").reset_index()
         # dfx = pd.concat([df1, df2], axis=1)
         # dfx["onset_diff"] = dfx.onset - dfx.start_sample
+        # print(dfx)
         # 
         # ^ verify that onset_diff is always .104 for all items. looks good.
-    
-        assert len(sentence_idxs) == len(span_df)
+
+        assert len(sentence_idxs) == len(span_df), subject_id
 
         span_df["sentence_idx"] = sentence_idxs
         return {
