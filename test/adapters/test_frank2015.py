@@ -1,5 +1,7 @@
 from pathlib import Path
 
+import numpy as np
+import pandas as pd
 import pytest
 
 from mfn400.adapters.frank2015 import FrankDatasetAdapter
@@ -14,7 +16,7 @@ def frank_dataset():
 
 @pytest.fixture(scope="session")
 def frank_processed_stimuli():
-    ret = Path("./output/frank2015/stim_df.csv")
+    ret = Path("./output/frank2015/stim_df.csv").resolve()
     assert ret.exists()
     return ret
 
@@ -56,13 +58,13 @@ def test_item_onset_agreement(frank2015):
         annot_df = frank2015._get_annotations_df(subject_id)
         annot_df = annot_df[annot_df.sentence_idx != -1]
         annot_sent_df = annot_df.groupby("sentence_idx", sort=False) \
-            .agg(onset="min").reset_index()
+            .onset.agg(onset_annots="min").reset_index()
 
-        assert len(span_df) == len(annot_df), \
+        assert len(span_df) == len(annot_sent_df), \
             f"Different number of sentences in signal data vs. annotations for subject {subject_id}"
 
-        merged = pd.concat([span_df, annot_sent_df], suffixes=("", "_annots"))
+        merged = pd.concat([span_df, annot_sent_df], axis=1)
         merged["onset_diff"] = merged.onset_annots - merged.onset
         diffs = np.array(merged.onset_diff)
 
-        assert np.isclose(diffs, diffs[0]), diffs
+        assert np.isclose(diffs, diffs[0]).all(), diffs

@@ -36,7 +36,7 @@ DROP_REGIONS = {
 """
 Some subjects have regions of signal data without corresponding sentence
 annotations. This metadata is stored here (designating 0-based region index in 
-raw signal) and applied in `_prepare_run_ranges`.
+raw signal) and applied in `_load_mne_single_subject`.
 
 See information in test suite `test_item_onset_agreement` for why this was
 done.
@@ -120,6 +120,13 @@ class FrankDatasetAdapter(MNEDatasetAdapter):
         # BUG want to annotate the complement of the span set denoted by
         # presentation_spans
         annotate_given_breaks(raw, presentation_spans)
+        
+        # Some subjects have data regions missing annotations. This causes
+        # alignment issues downstream. So we'll drop these regions from
+        # `presentation_spans` before it becomes an issue.
+        if subject_id in DROP_REGIONS:
+            presentation_spans = np.delete(
+                presentation_spans, DROP_REGIONS[subject_id], axis=0)
 
         return raw, presentation_spans
 
@@ -129,13 +136,6 @@ class FrankDatasetAdapter(MNEDatasetAdapter):
         from annotated raw data and the data regions `presentation_spans`
         as returned by `_load_mne_single_subject`.
         """
-        
-        # Some subjects have data regions missing annotations. This causes
-        # alignment issues downstream. So we'll drop these regions from
-        # `presentation_spans` before it becomes an issue.
-        if subject_id in DROP_REGIONS:
-            presentation_spans = np.delete(
-                presentation_spans, DROP_REGIONS[subject_id], axis=0)
         
         # `presentation_spans` above is following the order of presentation to
         # subject. Map this back to item idx.
