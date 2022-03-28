@@ -184,7 +184,10 @@ class MNEDatasetAdapter(DatasetAdapter):
         X_df = pd.concat({subject_idx: self.get_presentation_data(subject_idx)
                           for subject_idx in self._raw_data.keys()},
                          names=["subject", "index"])
-        # Set expected CDR `time` column
+        # Set expected CDR `time` column.
+        # TODO adjust time values correctly -- for each item, subtract max
+        # time (onset+duration) of preceding item. Probably should go in
+        # get_presentation_data
         X_df["time"] = X_df["onset_time"]
         X_df.to_csv(x_path, sep=" ")
 
@@ -195,10 +198,13 @@ class MNEDatasetAdapter(DatasetAdapter):
 
             # Undo concatenation into a single raw array, so that each
             # participant-run begins at time t=0.
+            #
+            # TODO This isn't wrong -- samples don't necessarily begin at t=0.
+            # Should subtract highest time of preceding item
             run_dfs = [df.loc[start_idx:end_idx] for start_idx, end_idx
                        in run_ranges]
-            run_dfs = [run_df.assign(time=run_df.time - run_df.time.min())
-                       for run_df in run_dfs]
+            # run_dfs = [run_df.assign(time=run_df.time - run_df.time.min())
+            #            for run_df in run_dfs]
 
             df = pd.concat(run_dfs, keys=[i + 1 for i in range(len(run_dfs))],
                            names=["item", "run_sample_id"]) \

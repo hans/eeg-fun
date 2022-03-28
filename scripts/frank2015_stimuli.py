@@ -9,7 +9,6 @@ import re
 from typing import Tuple, List
 import unicodedata
 
-import nltk
 import numpy as np
 import pandas as pd
 import scipy.io
@@ -21,12 +20,30 @@ from mfn400 import transformers_utils
 
 
 
-def load_stimuli(path) -> List[List[str]]:
+def load_stimuli(path) -> Tuple[List[List[str]], pd.DataFrame]:
     """
     Load sentence stimuli in original Frank format.
+    
+    Returns:
+        sentences: List of sentence token lists.
+        presentation_order: DataFrame describing the order of presentation
+            of each sentence to each subject. Index `sentence_idx`, 
+            `subject_idx`; single column `presentation_idx`. All values
+            are 1-based.
     """
     data = scipy.io.loadmat(path, simplify_cells=True)
-    return [list(sentence) for sentence in data["sentences"]]
+    
+    sentences = [list(sentence) for sentence in data["sentences"]]
+    
+    order = data["presentation_order"]
+    presentation_order = pd.DataFrame(
+        order,
+        index=pd.RangeIndex(1, order.shape[0] + 1, name="sentence_idx"),
+        columns=pd.RangeIndex(1, order.shape[1] + 1, name="subject_idx")) \
+        .melt(ignore_index=False, value_name="presentation_idx") \
+        .reset_index().set_index(["sentence_idx", "subject_idx"])
+    
+    return sentences, presentation_order
 
 
 def add_control_predictors(stim_df, sentences):
@@ -49,7 +66,7 @@ def add_word_freqs(stim_df, freqs_data):
 
 
 def main(args):
-    sentences = load_stimuli(args.stim_path)
+    sentences, presentation_df = load_stimuli(args.stim_path)
 
     stim_df = pd.concat(
         [pd.DataFrame({"word": sent}) for sent in sentences],
@@ -78,8 +95,12 @@ def main(args):
 
     if args.word_freqs_path:
         add_word_freqs(stim_df, args.word_freqs_path)
+        
+    # Now create full presentation matrix.
+    all_df = pd.merge(presentation_df, stim_df, how="left",
+                      left_index=True, right_index=True)
 
-    stim_df.to_csv(args.out_path)
+    all_df.to_csv(args.out_path)
 
 
 if __name__ == "__main__":
