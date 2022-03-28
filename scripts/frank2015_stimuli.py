@@ -27,14 +27,14 @@ def load_stimuli(path) -> Tuple[List[List[str]], pd.DataFrame]:
     Returns:
         sentences: List of sentence token lists.
         presentation_order: DataFrame describing the order of presentation
-            of each sentence to each subject. Index `sentence_idx`, 
+            of each sentence to each subject. Index `sentence_idx`,
             `subject_idx`; single column `presentation_idx`. All values
             are 1-based.
     """
     data = scipy.io.loadmat(path, simplify_cells=True)
-    
+
     sentences = [list(sentence) for sentence in data["sentences"]]
-    
+
     order = data["presentation_order"]
     presentation_order = pd.DataFrame(
         order,
@@ -42,7 +42,7 @@ def load_stimuli(path) -> Tuple[List[List[str]], pd.DataFrame]:
         columns=pd.RangeIndex(1, order.shape[1] + 1, name="subject_idx")) \
         .melt(ignore_index=False, value_name="presentation_idx") \
         .reset_index().set_index(["sentence_idx", "subject_idx"])
-    
+
     return sentences, presentation_order
 
 
@@ -95,7 +95,7 @@ def main(args):
 
     if args.word_freqs_path:
         add_word_freqs(stim_df, args.word_freqs_path)
-        
+
     # Now create full presentation matrix.
     all_df = pd.merge(presentation_df, stim_df, how="left",
                       left_index=True, right_index=True)

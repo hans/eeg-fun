@@ -20,7 +20,7 @@ info_re = re.compile(r"EEG(\d+)\.set")
 SUBJECT_6_MISSING_SENTENCES = [ 27, 173, 171, 145, 147,  39,
                                185,  46,  76,  68,  61 ]
 """
-Sentences (1-based index) missing from EEG recording of subject 6, even 
+Sentences (1-based index) missing from EEG recording of subject 6, even
 after merging the two parts stored separately. These IDs are still present
 in the e.g. stimulus data of subject 6, which is problematic. So we'll
 reach in and remove them manually.
@@ -30,20 +30,20 @@ reach in and remove them manually.
 class FrankDatasetAdapter(MNEDatasetAdapter):
     """
     Frank et al. 2015 naturalistic N400 dataset.
-    
+
     Data as published is already preprocessed:
     - 0.05-25Hz band-pass filter
     - re-referenced to average of left and right mastoid electrodes
-    
+
     Channel names follow EasyCap M10 montage.
     """
 
     name = "frank2015"
 
     # acquisition parameters
-    data_channels = ['1', '10', '12', '14', '16', '18', '21', '22', '24', 
-                     '25', '26', '29', '30', '31', '33', '34', '35', '36', 
-                     '37', '38', '39', '40', '41', '42', '44', '45', '46', 
+    data_channels = ['1', '10', '12', '14', '16', '18', '21', '22', '24',
+                     '25', '26', '29', '30', '31', '33', '34', '35', '36',
+                     '37', '38', '39', '40', '41', '42', '44', '45', '46',
                      '47', '48', '49', '50', '8']
     eog_channels = ["VEOG", "HEOG"]
     montage = "easycap-M10"
@@ -64,7 +64,7 @@ class FrankDatasetAdapter(MNEDatasetAdapter):
         eeg_paths = sorted(eeg_dir.glob("*.set"))
         eeg_paths = {info_re.match(p.name).group(1).lstrip("0"): p
                      for p in eeg_paths}
-        
+
         self._eeg_paths = eeg_paths
 
     def _load_mne(self):
@@ -76,9 +76,10 @@ class FrankDatasetAdapter(MNEDatasetAdapter):
             # DEV
             if subject_id != "6":
                 continue
-                
-            raw_data[subject_id], run_ranges[subject_id] = \
+
+            raw_data[subject_id], presentation_spans = \
                 self._load_mne_single_subject(subject_id, run_paths)
+            run_ranges[subject_id] = self._prepare_run_ranges(subject_id)
 
         self._raw_data = raw_data
         self._run_ranges = run_ranges
@@ -91,11 +92,11 @@ class FrankDatasetAdapter(MNEDatasetAdapter):
         else:
             raw = mne.io.read_raw_eeglab(run_path, **kwargs)
         raw.set_montage(self.montage)
-        
+
         # Not sure if it's important to have the existing band-pass filter
         # information in the MNE info. Probably not.
         # raw.info["highpass"], raw.info["lowpass"] = self.filter_window
-        
+
         # Break periods between items are represented in the raw data as NaN
         # data. Detect these and add MNE "BAD" annotations.
         raw_data: np.ndarray = raw.get_data()
@@ -106,40 +107,44 @@ class FrankDatasetAdapter(MNEDatasetAdapter):
         presentation_spans = np.array(list(zip(presentation_begins,
                                                presentation_ends)))
 
+        # BUG want to annotate the complement of the span set denoted by
+        # presentation_spans
         annotate_given_breaks(raw, presentation_spans)
-        
-        # Reindex presentation_spans to be in standard order across 
-        # participants (where element 0 corresponds to item 1, el 1 to item 2,
-        # etc.)
-        presentation_order = self.stimulus_df.xs(int(subject_id), level="subject_idx") \
-            .reset_index().sort_values("sentence_idx") \
-            .presentation_idx.unique()
-        
-        # If we're dealing with subject 6, remove the sentences in the
-        # presentation-order data that don't have a match in the EEG data
-        # / EEG annotations.
-        if subject_id == "6":
-            # TODO deal with bungled item idx on the other side
-            presentation_order = presentation_order[~presentation_order.sentence_idx.isin(SUBJECT_6_MISSING_SENTENCES)]
-            
-        presentation_order = presentation_order.presentation_idx.unique()
-
-        # NB this is 1-indexed in the stimulus_df.
-        presentation_order -= 1
-        print(subject_id, len(presentation_order), presentation_order)
-        print(presentation_spans.shape)
-        presentation_spans = presentation_spans[presentation_order, :]
-        print(presentation_spans.shape)
 
         return raw, presentation_spans
 
-    def get_presentation_data(self, subject_id) -> pd.DataFrame:
+    def _prepare_run_ranges(self, subject_id, presentation_spans):
+        """
+        Determine sample range corresponding to each run/item, working back
+        from annotated raw data and the data regions `presentation_spans`
+        as returned by `_load_mne_single_subject`.
+        """
+        # `presentation_spans` above is following the order of presentation to
+        # subject. Map this back to item idx.
+        span_df = pd.DataFrame(
+            presentation_spans,
+            columns=["start_sample", "end_sample"])
+
+        sentence_idxs = self._get_sentence_presentation_order(subject_id)
+        assert len(sentence_idxs) == len(span_df)
+
+        span_df["sentence_idx"] = sentence_idxs
+        return {
+            row.sentence_idx: (row.start_sample, row.end_sample)
+            for _, row in span_df.iterrows()
+        }
+
+    def _get_annotations_df(self, subject_id) -> pd.DataFrame:
+        """
+        Build a dataframe with readable sentence- and word-annotations
+        describing the presentation to a particular subject.
+        """
         raw = self._raw_data[subject_id]
         annotations_df = pd.DataFrame({
             "description": raw.annotations.description,
             "onset": raw.annotations.onset
         })
-        
+
         # Retain just presentation data (not BAD annotations).
         annotations_df = annotations_df.loc[~annotations_df.description.str.startswith("BAD")] \
             .astype({"description": int})
@@ -150,9 +155,11 @@ class FrankDatasetAdapter(MNEDatasetAdapter):
         # From their readme:
         #
         # If the value is larger than 50, then the word was the first word of
-        # the sentence with ID number EEG.event(n).type-50 (e.g., type 51 is the first word of sentence 1).
-        # If the value is between 2 and 15, then it identifies the word position within the sentence (e.g., type 2
-        # is the second word of the current sentence).
+        # the sentence with ID number EEG.event(n).type-50 (e.g., type 51 is
+        # the first word of sentence 1).
+        # If the value is between 2 and 15, then it identifies the word
+        # position within the sentence (e.g., type 2 is the second word of the
+        # current sentence).
 
         annotations_df.loc[annotations_df.description <= 50, "word_idx"] = \
             annotations_df.description - 1
@@ -175,11 +182,25 @@ class FrankDatasetAdapter(MNEDatasetAdapter):
             .drop(columns=["description"])
         annotations_df["subject_idx"] = subject_id
 
+        return annotations_df
+
+    def _get_sentence_presentation_order(self, subject_id) -> List[int]:
+        """
+        Return a list of sentence IDs (1-indexed) in the order presented to the
+        given subject.
+        """
+        annotations_df = self._get_annotations_df(subject_id)
+        annotations_df = annotations_df[annotations_df.sentence_idx != -1]
+        return list(annotations_df.sentence_idx.unique())
+
+    def get_presentation_data(self, subject_id) -> pd.DataFrame:
+        annotations_df = self._get_annotations_df(subject_id)
+
         ret = pd.merge(annotations_df, self.stimulus_df, how="left",
                        left_on=["subject_idx", "sentence_idx", "word_idx"],
                        right_index=True) \
             .rename(columns=dict(onset="onset_time"))
-        
+
         ret["item"] = ret["sentence_idx"]
 
         return ret
@@ -192,7 +213,7 @@ class FrankDatasetAdapter(MNEDatasetAdapter):
     def stimulus_df(self) -> pd.DataFrame:
         return self._stim_df
 
-    
+
 # class RawEEGLABFromStruct(mne.io.eeglab.RawEEGLab):
 #     """
 #     Hacky subclass to construct from preloaded mat.
@@ -211,7 +232,7 @@ class FrankDatasetAdapter(MNEDatasetAdapter):
 
 #         # read the data
 #         assert not isinstance(eeg.data, str)
-        
+
 #         if preload is False or isinstance(preload, str):
 #             warn('Data will be preloaded. preload=False or a string '
 #                  'preload is not supported when the data is stored in '
@@ -244,7 +265,7 @@ class FrankDatasetAdapter(MNEDatasetAdapter):
 #     def _read_segment_file(self, data, idx, fi, start, stop, cals, mult):
 #         """Read a chunk of raw data."""
 #         _read_segments_file(
-#             self, data, idx, fi, start, stop, cals, mult, dtype='<f4')    
+#             self, data, idx, fi, start, stop, cals, mult, dtype='<f4')
 
 
 @contextlib.contextmanager
@@ -254,16 +275,16 @@ def monkeypatched(object, name, patch):
     setattr(object, name, patch)
     yield object
     setattr(object, name, pre_patched_value)
-    
-    
+
+
 def make_eeglab_loader(struct_key):
     def load(fname, uint16_codec):
         """Check if the mat struct contains 'EEG'."""
         # Stolen from mne.io.eeglab.eeglab, but using a variable `struct_key`
         # rather than fixed "EEG"
-        
+
         from mne.utils import Bunch
-        
+
         eeg = pymatreader.read_mat(fname, uint16_codec=uint16_codec)
         if 'ALLEEG' in eeg:
             raise NotImplementedError(
@@ -277,25 +298,25 @@ def make_eeglab_loader(struct_key):
         eeg.nbchan = int(eeg.nbchan)
         eeg.pnts = int(eeg.pnts)
         return eeg
-    
+
     return load
 
 
 def read_two_part(path, **kwargs):
     """
     Read two-part EEGLAB output for participant 6.
-    
+
     Stored in keys `EEG` and `EEG_part2`.
     """
-    
+
     part1 = mne.io.read_raw_eeglab(path, **kwargs)
 
     monkey_loader = make_eeglab_loader("EEG_part2")
     with monkeypatched(mne.io.eeglab.eeglab, "_check_load_mat", monkey_loader):
         part2 = mne.io.read_raw_eeglab(path, **kwargs)
-    
+
     ret = mne.concatenate_raws([part1, part2])
-    
+
     sentence_ids = ret.annotations.description
     sentence_ids = sentence_ids[sentence_ids != "BAD boundary"]
     sentence_ids = sentence_ids[sentence_ids != "EDGE boundary"]
@@ -303,5 +324,5 @@ def read_two_part(path, **kwargs):
     sentence_ids = sentence_ids[sentence_ids > 50] - 50
     print(sentence_ids)
     print(len(sentence_ids))
-    
+
     return ret

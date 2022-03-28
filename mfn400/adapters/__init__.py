@@ -34,7 +34,7 @@ class DatasetAdapter(object):
                apply_baseline=True) -> pd.DataFrame:
         """
         Prepare a dataset for ERP analysis.
-        
+
         Args:
             epoch_window: Time window around each event to retain in epochs.
             test_window: Time window over which to average signal measure.
@@ -69,10 +69,10 @@ class MNEDatasetAdapter(DatasetAdapter):
     Mapping from subject -> RawData.
     """
 
-    _run_ranges: Optional[Dict[int, List[Tuple[int, int]]]] = None
+    _run_ranges: Optional[Dict[int, Dict[int, Tuple[int, int]]]] = None
     """
-    A list of sample index ranges (into `_raw_data`) with values
-    `[start_sample, end_sample)` (NB end is non-inclusive).
+    A dict of sample index ranges (into `_raw_data`) mapping item indices
+    to values `[start_sample, end_sample)` (NB end is non-inclusive).
     """
 
     _stim_df: Optional[pd.DataFrame] = None
@@ -100,7 +100,7 @@ class MNEDatasetAdapter(DatasetAdapter):
     def get_presentation_data(self, subject_id) -> pd.DataFrame:
         """
         Return a dataframe describing presentation to `subject_id`.
-        
+
         Should minimally contain columns `item` and `onset_time`.
         """
         # By default, assume presentations are the same across subjects.
@@ -136,7 +136,7 @@ class MNEDatasetAdapter(DatasetAdapter):
             for subject_id in self._raw_data
         }
         return epochs
-    
+
     def to_erp(self,
                epoch_window: Tuple[float, float],
                test_window: Tuple[float, float],
@@ -145,7 +145,7 @@ class MNEDatasetAdapter(DatasetAdapter):
                **preprocessing_kwargs) -> pd.DataFrame:
         """
         Prepare a dataset for ERP analysis.
-        
+
         Args:
             epoch_window: Time window around each event to retain in epochs.
             test_window: Time window over which to average signal measure.
@@ -201,13 +201,11 @@ class MNEDatasetAdapter(DatasetAdapter):
             #
             # TODO This isn't wrong -- samples don't necessarily begin at t=0.
             # Should subtract highest time of preceding item
-            run_dfs = [df.loc[start_idx:end_idx] for start_idx, end_idx
-                       in run_ranges]
-            # run_dfs = [run_df.assign(time=run_df.time - run_df.time.min())
-            #            for run_df in run_dfs]
+            run_dfs = {item_idx: df.loc[start_idx:end_idx]
+                       for item_idx, (start_idx, end_idx)
+                       in run_ranges.items()}
 
-            df = pd.concat(run_dfs, keys=[i + 1 for i in range(len(run_dfs))],
-                           names=["item", "run_sample_id"]) \
+            df = pd.concat(run_dfs, names=["item", "run_sample_id"]) \
                 .dropna()
             df["subject"] = subject_id
 
