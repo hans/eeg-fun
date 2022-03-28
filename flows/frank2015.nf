@@ -39,6 +39,7 @@ params.outdir = "${baseDir}/output/frank2015"
 
 // Duplicate channels for the two processing streams
 eeg_dir.into { eeg_dir_for_erp; eeg_dir_for_cdr }
+stim_file.into { stim_file_for_prep; stim_file_for_repro }
 
 /////////
 
@@ -47,7 +48,7 @@ process prepareStimuli {
     publishDir "${params.outdir}"
 
     input:
-    file stim_file from stim_file
+    file stim_file from stim_file_for_prep
 
     output:
     file("stim_df.csv") into stim_df
@@ -171,6 +172,27 @@ python -m cdr.bin.train cdr.ini
 """
 }
 
+process prepareERPControl {
+    label "mne"
+
+    when:
+    params.mode == "erp"
+
+    input:
+    file stim_raw from stim_file_for_repro
+
+    output:
+    file "erp.csv" into erp_control_df
+
+    script:
+"""
+#!/usr/bin/env bash
+
+python ${baseDir}/scripts/frank2015_erp_premade.py \
+    ${stim_raw} erp.csv
+"""
+}
+
 process prepareERP {
     label "mne"
 
@@ -180,25 +202,21 @@ process prepareERP {
     input:
     file eeg_dir from eeg_dir_for_erp
     file stim_df from stim_df_for_erp
+    file erp_control_df from erp_control_df
 
     output:
     file "erp.csv" into erp_df
 
     script:
 """
-#!/usr/bin/env python
+#!/usr/bin/env bash
 
-import sys
-sys.path.append("${baseDir}")
+# TODO pass epoching etc. parameters
 
-from mfn400.adapters.frank2015 import FrankDatasetAdapter
-from mfn400.n400 import prepare_erp_df
-
-data = FrankDatasetAdapter("${eeg_dir}", "${stim_df}")
-epochs = data.to_erp((${params.erp_epoch_window_left}, ${params.erp_epoch_window_right}),
-                     baseline=None)
-
-# TODO finish / put into script
+python ${baseDir}/scripts/frank2015_erp_repro.py \
+    ${eeg_dir} ${stim_df} \
+    -r ${erp_control_df} \
+    -o erp.csv
 """
 }
 
