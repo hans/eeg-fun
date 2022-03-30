@@ -130,11 +130,11 @@ y["mean_response"] = y[ELECTRODES].mean(axis=1)
 y = y.drop(columns=ELECTRODES)
 
 # Zero out clock at the start of each item.
-item_times = pd.DataFrame(X.groupby("item").time.min())
-item_times["y_time"] = y.groupby("item").time.min()
+item_times = pd.DataFrame(X.groupby(["subject", "item"]).time.min())
+item_times["y_time"] = y.groupby(["subject", "item"]).time.min()
 item_times["min_time"] = item_times.min(axis=1)
-X.time -= X.merge(item_times, how="left", left_on="item", right_index=True).min_time
-y.time -= y.merge(item_times, how="left", left_on="item", right_index=True).min_time
+X.time -= X.merge(item_times, how="left", left_on=["subject", "item"], right_index=True).min_time
+y.time -= y.merge(item_times, how="left", left_on=["subject", "item"], right_index=True).min_time
 
 X.to_csv("X_simp.txt", sep=" ", index=False)
 y.to_csv("y_simp.txt", sep=" ", index=False,
