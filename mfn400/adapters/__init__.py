@@ -190,6 +190,11 @@ class MNEDatasetAdapter(DatasetAdapter):
         # time (onset+duration) of preceding item. Probably should go in
         # get_presentation_data
         X_df["time"] = X_df["onset_time"]
+
+        # Drop NA values.
+        # TODO check / log effects
+        X_df = X_df.dropna()
+
         X_df.to_csv(x_path, sep=" ")
 
         # Write Y data.
