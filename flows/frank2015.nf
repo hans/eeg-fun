@@ -168,6 +168,9 @@ process runCDR {
     tuple file(X),
           file(y_train), file(y_dev), file(y_test) from CDR_data_simple
 
+    output:
+    file("CDR_full") into CDR_model
+
     script:
     response_expr = "mean_response"  // params.cdr_response_variables.join(" + ")
     predictor_expr = params.cdr_predictor_variables.join(" + ")
@@ -183,6 +186,7 @@ export y_test="${y_test}"
 export outdir="${params.outdir}"
 export series_ids="${params.cdr_series_ids}"
 export formula="${formula}"
+export model_name="CDR_full"
 
 envsubst < ${baseDir}/cdr_config_template.ini > cdr.ini
 
