@@ -216,6 +216,3 @@ class MNEDatasetAdapter(DatasetAdapter):
 
             df.to_csv(y_path, mode="a", sep=" ", header=header,
                       float_format="%.4f")
-
-            # DEV
-            break
