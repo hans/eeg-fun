@@ -31,7 +31,7 @@ params.cdr_response_variables = [
                      '25', '26', '29', '30', '31', '33', '34', '35', '36',
                      '37', '38', '39', '40', '41', '42', '44', '45', '46',
                      '47', '48', '49', '50', '8']
-params.cdr_predictor_variables = ["surprisal"]
+params.cdr_predictor_variables = ["surprisal", "word_freq"]
 params.cdr_series_ids = "item subject"
 
 /////////
