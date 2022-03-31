@@ -166,7 +166,7 @@ process runCDR {
     script:
     response_expr = "mean_response"  // params.cdr_response_variables.join(" + ")
     predictor_expr = params.cdr_predictor_variables.join(" + ")
-    formula = "${response_expr} ~ C(${predictor_expr}, NN())"
+    formula = "${response_expr} ~ C(${predictor_expr}, NN()) + (C(${predictor_expr}, NN()) | subject)"
 
 """
 #!/usr/bin/env bash
