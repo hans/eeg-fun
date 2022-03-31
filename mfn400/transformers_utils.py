@@ -19,7 +19,7 @@ def compute_surprisals(sentences: List[List[str]], model="gpt2") -> pd.DataFrame
         sent_idx:
         text_word_idx: Index into sentence word idx
         tok_idx: Model token idx
-        surprisal: log-e surprisal
+        surprisal: log-2 surprisal
     """
     hf_tokenizer = transformers.AutoTokenizer.from_pretrained(model)
     hf_model = transformers.AutoModelForCausalLM.from_pretrained(
@@ -48,7 +48,7 @@ def compute_surprisals(sentences: List[List[str]], model="gpt2") -> pd.DataFrame
             # We are enumerating the shifted list. Get the original token
             # index.
             tok_id = idx + 1
-            
+
             if word_ids[tok_id] is None:
                 continue
             elif word_ids[tok_id] >= len(sentences[sent_idx]):
@@ -58,7 +58,7 @@ def compute_surprisals(sentences: List[List[str]], model="gpt2") -> pd.DataFrame
                 # input sentence. See comment in `get_predictive_outputs` for
                 # a fix, if you really care about sentence-final surprisals.
                 continue
-                
+
             surp_mapping.append((global_tok_cursor + word_ids[tok_id],
                                  sent_idx, word_ids[tok_id], tok_id, surp))
 
@@ -82,11 +82,12 @@ def get_predictive_outputs(model: transformers.PreTrainedModel,
         encoding: BatchEncoding
         surprisals: a list of matrices, one per sentence, each `T * vocab_size`
             where `T` is the number of tokens in the corresponding sentence.
+            log-2 surprisal.
     """
     tokenized = tokenizer.batch_encode_plus(
         [" ".join(sentence) for sentence in sentences],
         add_special_tokens=True, return_offsets_mapping=True)
-    
+
     # NB doesn't always handle sentence-final punctuation correctly -- is
     # mapped onto a separate word_id.
     # In principle, we should tokenize with `is_split_into_words=True`.
@@ -119,7 +120,7 @@ def get_predictive_outputs(model: transformers.PreTrainedModel,
                 input_ids = input_ids[:, max_len:]
 
         # T * vocab_size
-        all_surprisals = np.concatenate(surprisal_outputs, axis=0)
+        all_surprisals = np.concatenate(surprisal_outputs, axis=0) / np.log(2)
 
         ret.append(all_surprisals)
 
