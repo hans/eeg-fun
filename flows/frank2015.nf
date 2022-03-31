@@ -110,7 +110,8 @@ process simplifyCDR {
     tuple file(X), file(y) from CDR_data
 
     output:
-    tuple file("X_simp.txt"), file("y_simp.txt") into CDR_data_simple
+    tuple file("X_simp.txt"),
+          file("y_simp.train.txt"), file("y_simp.dev.txt"), file("y_simp.test.txt") into CDR_data_simple
 
     script:
 
@@ -136,9 +137,18 @@ item_times["min_time"] = item_times.min(axis=1)
 X.time -= X.merge(item_times, how="left", left_on=["subject", "item"], right_index=True).min_time
 y.time -= y.merge(item_times, how="left", left_on=["subject", "item"], right_index=True).min_time
 
+# Compute train/dev/test splits.
+X["modulus"] = (X["item"] + X["subject"]) % 4
+y["modulus"] = (y["item"] + y["subject"]) % 4
+mapping = {0: "train", 1: "train", 2: "dev", 3: "test"}
+X["target"] = X.modulus.map(mapping)
+y["target"] = y.modulus.map(mapping)
+
+# Only y should be partitioned in separate files, per CDR design.
 X.to_csv("X_simp.txt", sep=" ", index=False)
-y.to_csv("y_simp.txt", sep=" ", index=False,
-         float_format="%.4f")
+for target in set(mapping.values()):
+    y[y.target == target].to_csv(f"y_simp.{target}.txt", sep=" ", index=False,
+                                 float_format="%.4f")
 """
 }
 
@@ -150,7 +160,8 @@ process runCDR {
     params.mode == "cdr"
 
     input:
-    tuple file(X), file(y) from CDR_data_simple
+    tuple file(X),
+          file(y_train), file(y_dev), file(y_test) from CDR_data_simple
 
     script:
     response_expr = "mean_response"  // params.cdr_response_variables.join(" + ")
@@ -160,8 +171,10 @@ process runCDR {
 """
 #!/usr/bin/env bash
 
-export X_train="${X}"
-export y_train="${y}"
+export X="${X}"
+export y_train="${y_train}"
+export y_dev="${y_dev}"
+export y_test="${y_test}"
 export outdir="${params.outdir}"
 export series_ids="${params.cdr_series_ids}"
 export formula="${formula}"
