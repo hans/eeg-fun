@@ -11,6 +11,9 @@ stim_file = Channel.fromPath(params.data_dir + "/stimuli_erp.mat")
 params.language_model = "EleutherAI/gpt-neo-125M"
 params.transformers_cache = "${baseDir}/transformers_cache"
 
+params.word_freqs_path = "data/frank2015_logwordfreqs.tsv"
+word_freqs = Channel.fromPath(params.word_freqs_path)
+
 /**
  * Specify the analysis to carry out. One of "erp", "cdr"
  */
@@ -49,6 +52,7 @@ process prepareStimuli {
 
     input:
     file stim_file from stim_file_for_prep
+    file word_freqs from word_freqs
 
     output:
     file("stim_df.csv") into stim_df
@@ -61,6 +65,7 @@ TRANSFORMERS_CACHE=${params.transformers_cache} python \
     ${baseDir}/scripts/frank2015_stimuli.py \
         ${stim_file} \
         --model ${params.language_model} \
+        --word-freqs-path ${word_freqs} \
         -o stim_df.csv
 """
 }
