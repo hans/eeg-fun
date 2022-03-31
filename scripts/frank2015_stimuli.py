@@ -23,7 +23,7 @@ from mfn400 import transformers_utils
 def load_stimuli(path) -> Tuple[List[List[str]], pd.DataFrame]:
     """
     Load sentence stimuli in original Frank format.
-    
+
     Returns:
         sentences: List of sentence token lists.
         presentation_order: DataFrame describing the order of presentation
@@ -60,7 +60,7 @@ def add_word_freqs(stim_df, freqs_data):
         for line in f:
             if line.strip():
                 word, freq = line.strip().split("\t")
-                word_freqs[word] = int(freq)
+                word_freqs[word.strip().lower()] = float(freq)
 
     stim_df["word_freq"] = stim_df.word.str.lower().map(word_freqs)
 
