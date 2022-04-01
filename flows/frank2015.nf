@@ -33,6 +33,7 @@ params.cdr_response_variables = [
                      '47', '48', '49', '50', '8']
 params.cdr_predictor_variables = ["surprisal", "word_freq"]
 params.cdr_series_ids = "item subject"
+params.cdr_history_length = 64
 
 /////////
 
@@ -184,6 +185,7 @@ export y_train="${y_train}"
 export y_dev="${y_dev}"
 export y_test="${y_test}"
 export outdir="${params.outdir}"
+export history_length="${params.cdr_history_length}"
 export series_ids="${params.cdr_series_ids}"
 export formula="${formula}"
 export model_name="CDR_full"
