@@ -29,7 +29,7 @@ params.erp_test_window_right = 0.5
 params.cdr_response_variables = [
     "1", "14", "24", "25", "26", "29", "30", "31", "41", "42", "44", "45"
 ]
-params.cdr_predictor_variables = ["surprisal", "word_freq"]
+params.cdr_predictor_variables = ["rate", "surprisal", "word_freq"]
 params.cdr_series_ids = "item subject"
 params.cdr_history_length = 64
 
