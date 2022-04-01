@@ -31,7 +31,7 @@ params.cdr_response_variables = [
 ]
 params.cdr_predictor_variables = ["rate", "surprisal", "word_freq"]
 params.cdr_series_ids = "item subject"
-params.cdr_history_length = 64
+params.cdr_history_length = 14
 
 /////////
 
