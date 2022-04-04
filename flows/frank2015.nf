@@ -26,9 +26,18 @@ params.erp_test_window_left = 0.3
 params.erp_test_window_right = 0.5
 
 // CDR parameters
-params.cdr_response_variables = [
-    "1", "14", "24", "25", "26", "29", "30", "31", "41", "42", "44", "45"
-]
+if (params.cdr_electrode_set == "all") {
+    // Use all available electrodes in Frank dataset.
+    params.cdr_response_variables = ['1', '10', '12', '14', '16', '18', '21', '22', '24',
+                     '25', '26', '29', '30', '31', '33', '34', '35', '36',
+                     '37', '38', '39', '40', '41', '42', '44', '45', '46',
+                     '47', '48', '49', '50', '8']
+} else if (params.cdr_electrode_set == "n400") {
+    // Use just the electrodes specified by Frank for N400 test.
+    params.cdr_response_variables = [
+        "1", "14", "24", "25", "26", "29", "30", "31", "41", "42", "44", "45"
+    ]
+}
 params.cdr_predictor_variables = ["rate", "surprisal", "word_freq"]
 params.cdr_series_ids = "item subject"
 params.cdr_history_length = 14
