@@ -51,16 +51,28 @@ class BrennanDatasetAdapter(MNEDatasetAdapter):
             stim_path,
             index_col=None) \
             .rename(columns=dict(Position="word_idx",
-                                 Sentence="sentence_idx")) \
+                                 Sentence="sentence_idx",
+                                 Segment="segment_idx")) \
             .drop(columns=["LogFreq_Prev", "LogFreq_Next"]) \
-            .set_index(["sentence_idx", "word_idx"])
+            .set_index(["segment_idx", "sentence_idx", "word_idx"])
+        # Onsets are reset between segments. Fix this.
+        # TODO make sure we're doing this correctly -- using offset of previous segment.
+        segment_onsets = self._stim_df.groupby("segment_idx").offset.max() \
+            .shift(1).fillna(0.).cumsum()
+        self._stim_df.onset += segment_onsets
+        self._stim_df.offset += segment_onsets
+        # Segments are no longer useful. Drop.
+        self._stim_df = self._stim_df.droplevel("segment_idx")
 
         self._load_mne()
 
     def _prepare_paths(self, eeg_dir):
-        eeg_paths = sorted(eeg_dir.glob("*.mat"))
+        eeg_paths = sorted(eeg_dir.glob("S*.mat"))
         eeg_paths = {info_re.match(p.name).group(1).lstrip("0"): p
                      for p in eeg_paths}
+        
+        # DEV
+        eeg_paths = {"1": eeg_paths["1"]}
 
         self._eeg_paths = eeg_paths
 
@@ -75,18 +87,23 @@ class BrennanDatasetAdapter(MNEDatasetAdapter):
 
             # Dummy annotation: we have just one "run" per subject of continuous
             # speech stimulus.
-            self._run_ranges[subject_id] = {1: (0, self._raw_data.n_times)}
+            self._run_ranges[subject_id] = {1: (0, self._raw_data[subject_id].n_times)}
 
     def _load_mne_single_subject(self, subject_id, run_path) -> Tuple[mne.io.Raw, List[int]]:
         info = mne.create_info(ch_names=self.all_channels,
                                sfreq=self.sample_rate,
                                ch_types=self.all_channel_types)
         raw = mne.io.read_raw_fieldtrip(run_path, info=info, data_name="raw")
+        
+        # Add annotations based on stim_df.
+        for (sentence_idx, word_idx), row in self.stimulus_df.iterrows():
+            raw.annotations.append(row.onset, row.offset - row.onset,
+                                   description=f"{sentence_idx}_{word_idx}")
 
         # Load annotations from authors' preprocessing.
         annots_path = run_path.parent / "proc" / run_path.name
         assert annots_path.exists(), f"Missing proc/{run_path.name}"
-        annots = scipy.io.loadmat(annots_path, simplify_cells=True)
+        annots = scipy.io.loadmat(annots_path, simplify_cells=True)["proc"]
 
         return raw, annots
 
@@ -96,13 +113,14 @@ class BrennanDatasetAdapter(MNEDatasetAdapter):
 
         # TODO filtering?
 
+        # Re-reference
+        reference_channels = set(annots["refchannels"]) & set(raw.info["ch_names"])
+        if len(reference_channels) > 0:
+            mne.set_eeg_reference(raw, reference_channels)
+        
         # Subset channels, based on their manual analysis
         pick_channels = annots["rejections"]["final"]["chanpicks"]
         raw = raw.pick_channels(pick_channels)
-
-        # Re-reference
-        reference_channels = annots["refchannels"]
-        mne.set_eeg_reference(raw, reference_channels)
 
         return raw
 
