@@ -37,6 +37,12 @@ class BrennanDatasetAdapter(MNEDatasetAdapter):
     all_channel_types = (["eeg"] * len(data_channels)) + \
         (["eog"] * len(eog_channels)) + \
         (["misc"] * len(misc_channels))
+    
+    # subjects which should be used, according to dataset annotations
+    use_subjects = ['1', '10', '11', '12', '13', '14', '15', '16', '17', '18',
+                    '19', '20', '21', '22', '25', '26', '3', '34', '35', '36',
+                    '37', '38', '39', '4', '40', '41', '42', '44', '45', '48',
+                    '5', '6', '8']
 
     montage = "easycap-M10"
     sample_rate = 500
@@ -71,8 +77,8 @@ class BrennanDatasetAdapter(MNEDatasetAdapter):
         eeg_paths = {info_re.match(p.name).group(1).lstrip("0"): p
                      for p in eeg_paths}
         
-        # DEV
-        eeg_paths = {"1": eeg_paths["1"]}
+        eeg_paths = {idx: path for idx, path in eeg_paths.items()
+                     if idx in self.use_subjects}
 
         self._eeg_paths = eeg_paths
 
