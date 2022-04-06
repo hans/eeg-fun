@@ -2,6 +2,7 @@
 Tools for MNE N400 analysis.
 """
 
+import logging
 from typing import Tuple
 
 import mne
@@ -84,6 +85,17 @@ def prepare_erp_df(epochs: mne.Epochs, stim_df: pd.DataFrame,
                                   suffixes=("", "_baseline"))
         
     epoch_averages = epoch_averages.reset_index()
+    
+    # If epochs were dropped in preprocessing, drop the corresponding
+    # stimulus rows.
+    dropped_epochs = [idx for idx, log in enumerate(epochs.drop_log)
+                      if len(log) > 0]
+    if len(dropped_epochs) > 0:
+        logging.warning(f"{len(dropped_epochs)} dropped epochs; will drop "
+                         "corresponding stimulus rows.")
+        mask = np.repeat(True, len(stim_df))
+        mask[dropped_epochs] = False
+        stim_df = stim_df.loc[mask]
     
     assert len(stim_df) == len(epoch_averages), \
         (f"Mismatched presentation data and epoch data. Something's wrong. "
