@@ -103,8 +103,10 @@ class BroderickDatasetAdapter(MNEDatasetAdapter):
 
         return raw_data, run_offsets
 
-    def _preprocess(self, raw_data: mne.io.Raw,
+    def _preprocess(self, subject_id,
                     filter_window: Tuple[float, float]) -> mne.io.Raw:
+        raw_data = self._raw_data[subject_id]
+        
         # Set reference.
         # TODO(EEG) is this reference right? just using the average of
         # bilateral channels

@@ -80,7 +80,7 @@ class MNEDatasetAdapter(DatasetAdapter):
     Columns: `token`, `token_surprisal`, `onset_time`, `offset_time`
     """
 
-    def _preprocess(self, raw_data: mne.io.Raw, **kwargs) -> mne.io.Raw:
+    def _preprocess(self, subject_id, **kwargs) -> mne.io.Raw:
         raise NotImplementedError()
 
     def run_preprocessing(self, **kwargs):
@@ -92,8 +92,7 @@ class MNEDatasetAdapter(DatasetAdapter):
             raise RuntimeError("run_preprocessing was already called.")
 
         for idx in self._raw_data:
-            self._raw_data[idx] = self._preprocess(self._raw_data[idx],
-                                                   **kwargs)
+            self._raw_data[idx] = self._preprocess(idx, **kwargs)
 
         self.preprocessed = True
 
