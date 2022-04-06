@@ -1,14 +1,10 @@
-import contextlib
-import itertools
-import logging
 from pathlib import Path
 import re
-from typing import Optional, Tuple, List, Dict
+from typing import Tuple, List
 
 import mne
 import numpy as np
 import pandas as pd
-import pymatreader
 import scipy.io
 
 from mfn400.adapters import MNEDatasetAdapter
