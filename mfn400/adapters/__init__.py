@@ -167,7 +167,7 @@ class MNEDatasetAdapter(DatasetAdapter):
                             baseline=baseline_window) \
              .drop(columns=["subject_idx"], errors="ignore")
              for subject in epochs],
-            names=["subject_idx"],
+            names=["subject_idx", "index"],
             keys=[int(idx) for idx in epochs.keys()]
         )
 
