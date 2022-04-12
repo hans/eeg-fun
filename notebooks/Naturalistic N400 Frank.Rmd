@@ -2,7 +2,7 @@
 title: "R Notebook"
 output: html_notebook
 args:
-  file: "../output/frank_erp_n400-repro.csv"
+  file: "../output/frank2015/erp/erp_full.csv"
 ---
 
 ```{r}
@@ -27,14 +27,16 @@ summary(base_model)
 ```
 
 ```{r}
-model_their_surprisals = lmer(our_N400 ~ surp_ngram_order_3 + logwordfreq * wordlength + our_baseline + (1 | sentence_idx) + (logwordfreq + wordlength + surp_ngram_order_3 | subject_idx),
+# NB removed surp from ranef because singular fit
+model_their_surprisals = lmer(our_N400 ~ surp_ngram_order_3 + logwordfreq * wordlength + our_baseline + (1 | sentence_idx) + (logwordfreq + wordlength | subject_idx),
              control=lmerControl(optimizer="bobyqa", optCtrl=list(maxfun=100000)),
              data=df %>% filter(!artefact, !reject))
 summary(model_their_surprisals)
 ```
 
 ```{r}
-model = lmer(our_N400 ~ surprisal + logwordfreq * wordlength + our_baseline + (1 | sentence_idx) + (logwordfreq + wordlength + surprisal | subject_idx),
+# NB removed wordlen | subject_idx due to failed convergence
+model = lmer(our_N400 ~ surprisal + logwordfreq * wordlength + our_baseline + (1 | sentence_idx) + (logwordfreq + surprisal | subject_idx),
              control=lmerControl(optimizer="bobyqa", optCtrl=list(maxfun=100000)),
              data=df %>% filter(!artefact, !reject))
 summary(model)
@@ -42,5 +44,17 @@ summary(model)
 
 ```{r}
 anova(model, base_model, refit=FALSE)
+```
+
+```{r}
+surp_coef = tidy(model_their_surprisals) %>% filter(term == "surp_ngram_order_3") %>% pull(estimate)
+their_surp_effect_bounds = df %>% select(!artefact, !reject) %>% summarise(min(surp_ngram_order_3, na.rm=T), max(surp_ngram_order_3, na.rm=T)) %>% pivot_longer(everything()) %>% mutate(value=value * surp_coef)
+their_surp_effect_bounds
+```
+
+```{r}
+surp_coef = tidy(model) %>% filter(term == "surprisal") %>% pull(estimate)
+surp_effect_bounds = df %>% select(!artefact, !reject) %>% summarise(min(surprisal, na.rm=T), max(surprisal, na.rm=T)) %>% pivot_longer(everything()) %>% mutate(value=value * surp_coef)
+surp_effect_bounds
 ```
 
