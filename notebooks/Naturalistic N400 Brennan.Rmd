@@ -1,0 +1,46 @@
+---
+title: "R Notebook"
+output: html_notebook
+args:
+  file: "../brennan_erp_n400.csv"
+---
+
+```{r}
+library(tidyverse)
+library(lme4)
+library(lmerTest)
+library(broom.mixed)
+```
+
+```{r}
+df <- read_csv(params$file)
+glimpse(df)
+```
+
+
+```{r}
+# NB removed interaction of frequency * length from random effects to get convergence
+base_model = lmer(n400 ~ LogFreq * Length + our_baseline + (1 | sentence_idx),# + (LogFreq + Length | subject_idx),
+                  control=lmerControl(optimizer="bobyqa", optCtrl=list(maxfun=100000)),
+                  data=df)
+summary(base_model)
+```
+
+```{r}
+model_their_surprisals = lmer(n400 ~ RNN + LogFreq * Length + our_baseline + (1 | sentence_idx),# + (LogFreq + Length + RNN | subject_idx),
+             control=lmerControl(optimizer="bobyqa", optCtrl=list(maxfun=100000)),
+             data=df)
+summary(model_their_surprisals)
+```
+
+```{r}
+model = lmer(our_N400 ~ surprisal + logwordfreq * wordlength + our_baseline + (1 | sentence_idx) + (logwordfreq + wordlength + surprisal | subject_idx),
+             control=lmerControl(optimizer="bobyqa", optCtrl=list(maxfun=100000)),
+             data=df %>% filter(!artefact, !reject))
+summary(model)
+```
+
+```{r}
+anova(model, base_model, refit=FALSE)
+```
+
