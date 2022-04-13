@@ -46,6 +46,10 @@ if (!(params.cdr_response_type in ["univariate", "multivariate"])) {
 params.cdr_predictor_variables = ["rate", "surprisal", "word_freq"]
 params.cdr_series_ids = "item subject"
 params.cdr_history_length = 14
+// Fraction of items to retain when subsetting
+params.cdr_subset_item_frac = 0.2
+// Fraction of subjects to retain when subsetting
+params.cdr_subset_subject_frac = 0.5
 
 /////////
 
@@ -179,6 +183,34 @@ for target in set(mapping.values()):
 """
 }
 
+CDR_data_simple.into { CDR_data_simple_for_train; CDR_data_simple_for_subset }
+
+def makeCDRInvocation(String x, String y_train, String y_dev, String y_test) {
+    response_expr = params.cdr_response_type == "univariate"
+        ? "mean_response"
+        : params.cdr_response_variables.join(" + ")
+    predictor_expr = params.cdr_predictor_variables.join(" + ")
+    formula = "${response_expr} ~ C(${predictor_expr}, NN()) + (C(${predictor_expr}, NN(ran=T)) | subject)"
+
+    """
+    #!/usr/bin/env bash
+
+    export X="${X}"
+    export y_train="${y_train}"
+    export y_dev="${y_dev}"
+    export y_test="${y_test}"
+    export outdir="${params.outdir}"
+    export history_length="${params.cdr_history_length}"
+    export series_ids="${params.cdr_series_ids}"
+    export formula="${formula}"
+    export model_name="CDR_full"
+
+    envsubst < ${baseDir}/cdr_config_template.ini > cdr.ini
+
+    python -m cdr.bin.train cdr.ini
+    """
+}
+
 process runCDR {
     label "cdr"
     publishDir "${params.outdir}"
@@ -188,35 +220,84 @@ process runCDR {
 
     input:
     tuple file(X),
-          file(y_train), file(y_dev), file(y_test) from CDR_data_simple
+          file(y_train), file(y_dev), file(y_test) from CDR_data_simple_for_train
 
     output:
     file("CDR_full") into CDR_model
 
     script:
-    response_expr = params.cdr_response_type == "univariate"
-        ? "mean_response"
-        : params.cdr_response_variables.join(" + ")
-    predictor_expr = params.cdr_predictor_variables.join(" + ")
-    formula = "${response_expr} ~ C(${predictor_expr}, NN()) + (C(${predictor_expr}, NN(ran=T)) | subject)"
+    makeCDRInvocation(X, y_train, y_dev, y_test)
+}
 
+/**
+ * Prepare subsetted CDR data for quick exploratory fits, etc.
+ */
+process subsetCDR {
+    label "mne"
+    publishDir "${params.outdir}/subset"
+
+    when:
+    params.cdr_subset
+
+    input:
+    tuple file(X),
+          file(y_train), file(y_dev), file(y_test) from CDR_data_simple_for_subset
+
+    output:
+    tuple file("X_subset.txt"),
+          file("y_subset.train.txt"), file("y_subset.dev.txt"), file("y_subset.test.txt") into CDR_data_subset
+
+    script:
 """
-#!/usr/bin/env bash
+#!/usr/bin/env python
 
-export X="${X}"
-export y_train="${y_train}"
-export y_dev="${y_dev}"
-export y_test="${y_test}"
-export outdir="${params.outdir}"
-export history_length="${params.cdr_history_length}"
-export series_ids="${params.cdr_series_ids}"
-export formula="${formula}"
-export model_name="CDR_full"
+import numpy as np
+import pandas as pd
 
-envsubst < ${baseDir}/cdr_config_template.ini > cdr.ini
+X = pd.read_csv("${X}", sep=" ")
+y_train, y_dev, y_test = [pd.read_csv(f, sep=" ") for f in ["${y_train}",
+                                                            "${y_dev}",
+                                                            "${y_test}"]]
 
-python -m cdr.bin.train cdr.ini
+keep_subject_frac = ${params.cdr_subset_subject_frac}
+keep_item_frac = ${params.cdr_subset_item_frac}
+
+subjects, items = X.subject.unique(), X.item.unique()
+n_subjects = np.floor(keep_subject_frac * len(subjects))
+n_items = np.floor(keep_item_frac * len(items))
+
+keep_subjects = np.random.choice(subjects, n_subjects, replace=False)
+keep_items = np.random.choice(items, n_items, replace=False)
+
+for dataset in [X, y_train, y_dev, y_test]:
+    dataset.drop(dataset[~(dataset.subject.isin(keep_subjects)
+                           & dataset.item.isin(keep_items))].index,
+                 inplace=True)
+
+X.to_csv("X_subset.txt", sep=" ", index=False)
+for y_dataset in [y_train, y_dev, y_test]
+    label = y_dataset.iloc[0].target
+    y_dataset.to_csv(f"y_subset.{label}.txt", sep=" ", index=False,
+                     float_format="%.4f")
 """
+}
+
+process runCDRSubset {
+    label "cdr"
+    publishDir "${params.outdir}/subset"
+
+    when:
+    params.mode == "cdr"
+
+    input:
+    tuple file(X),
+          file(y_train), file(y_dev), file(y_test) from CDR_data_subset
+
+    output:
+    file("CDR_subset") into CDR_model
+
+    script:
+    makeCDRInvocation(X, y_train, y_dev, y_test)
 }
 
 process prepareERPControl {
