@@ -37,6 +37,11 @@ if (params.cdr_electrode_set == "all") {
     params.cdr_response_variables = [
         "1", "14", "24", "25", "26", "29", "30", "31", "41", "42", "44", "45"
     ]
+} else {
+    throw new IllegalArgumentException("cdr_electrode_set must be one of `all`, `n400`")
+}
+if (!(params.cdr_response_type in ["univariate", "multivariate"])) {
+    throw new IllegalArgumentException("cdr_response_type must be one of `univariate`, `multivariate`")
 }
 params.cdr_predictor_variables = ["rate", "surprisal", "word_freq"]
 params.cdr_series_ids = "item subject"
@@ -80,6 +85,9 @@ TRANSFORMERS_CACHE=${params.transformers_cache} python \
 
 stim_df.into { stim_df_for_erp; stim_df_for_cdr }
 
+/**
+ * Join raw EEG data with stimulus data and convert to CDR format.
+ */
 process prepareCDR {
     label "mne"
 
@@ -111,7 +119,11 @@ dataset.to_cdr("X.txt", "y.txt")
 }
 
 /**
- * Average across electrodes of interest.
+ * Preprocess stimulus and EEG response data:
+ *
+ * 1. Prepare response variable (electrode subsetting; spatial/temporal averaging)
+ * 2. Adjust time axis (zero out at start of each item)
+ * 3. Create train/dev/test split
  */
 process simplifyCDR {
     label "mne"
@@ -129,6 +141,7 @@ process simplifyCDR {
     script:
 
     electrodes_arr = "[" + params.cdr_response_variables.join(",") + "]"
+    switch_univariate = params.cdr_response_type == "univariate" ? "True" : "False"
 """
 #!/usr/bin/env python
 
@@ -138,10 +151,11 @@ ELECTRODES = ${electrodes_arr}
 ELECTRODES = [str(el) for el in ELECTRODES]
 
 X = pd.read_csv("${X}", sep=" ")
-
 y = pd.read_csv("${y}", sep=" ")
-y["mean_response"] = y[ELECTRODES].mean(axis=1)
-y = y.drop(columns=ELECTRODES)
+
+if ${switch_univariate}:
+    y["mean_response"] = y[ELECTRODES].mean(axis=1)
+    y = y.drop(columns=ELECTRODES)
 
 # Zero out clock at the start of each item.
 item_times = pd.DataFrame(X.groupby(["subject", "item"]).time.min())
@@ -180,7 +194,9 @@ process runCDR {
     file("CDR_full") into CDR_model
 
     script:
-    response_expr = "mean_response"  // params.cdr_response_variables.join(" + ")
+    response_expr = params.cdr_response_type == "univariate"
+        ? "mean_response"
+        : params.cdr_response_variables.join(" + ")
     predictor_expr = params.cdr_predictor_variables.join(" + ")
     formula = "${response_expr} ~ C(${predictor_expr}, NN()) + (C(${predictor_expr}, NN(ran=T)) | subject)"
 
