@@ -1,5 +1,7 @@
 #!/usr/bin/env nextflow
 
+import nextflow.processor.TaskPath
+
 baseDir = workflow.launchDir
 
 // Path to Broderick raw data
@@ -185,7 +187,7 @@ for target in set(mapping.values()):
 
 CDR_data_simple.into { CDR_data_simple_for_train; CDR_data_simple_for_subset }
 
-def makeCDRInvocation(String x, String y_train, String y_dev, String y_test) {
+def makeCDRInvocation(TaskPath X, TaskPath y_train, TaskPath y_dev, TaskPath y_test) {
     response_expr = params.cdr_response_type == "univariate"
         ? "mean_response"
         : params.cdr_response_variables.join(" + ")
@@ -216,7 +218,7 @@ process runCDR {
     publishDir "${params.outdir}"
 
     when:
-    params.mode == "cdr"
+    params.mode == "cdr" && !params.cdr_subset
 
     input:
     tuple file(X),
@@ -263,8 +265,8 @@ keep_subject_frac = ${params.cdr_subset_subject_frac}
 keep_item_frac = ${params.cdr_subset_item_frac}
 
 subjects, items = X.subject.unique(), X.item.unique()
-n_subjects = np.floor(keep_subject_frac * len(subjects))
-n_items = np.floor(keep_item_frac * len(items))
+n_subjects = int(np.floor(keep_subject_frac * len(subjects)))
+n_items = int(np.floor(keep_item_frac * len(items)))
 
 keep_subjects = np.random.choice(subjects, n_subjects, replace=False)
 keep_items = np.random.choice(items, n_items, replace=False)
@@ -275,7 +277,7 @@ for dataset in [X, y_train, y_dev, y_test]:
                  inplace=True)
 
 X.to_csv("X_subset.txt", sep=" ", index=False)
-for y_dataset in [y_train, y_dev, y_test]
+for y_dataset in [y_train, y_dev, y_test]:
     label = y_dataset.iloc[0].target
     y_dataset.to_csv(f"y_subset.{label}.txt", sep=" ", index=False,
                      float_format="%.4f")
