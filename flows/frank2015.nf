@@ -294,7 +294,7 @@ process runCDRSubset {
           file(y_train), file(y_dev), file(y_test) from CDR_data_subset
 
     output:
-    file("CDR_subset") into CDR_model
+    file("CDR_subset") into CDR_model_subset
 
     script:
     makeCDRInvocation(X, y_train, y_dev, y_test)
