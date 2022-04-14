@@ -1,5 +1,6 @@
 #!/usr/bin/env nextflow
 
+import groovy.json.JsonOutput
 import nextflow.processor.TaskPath
 
 baseDir = workflow.launchDir
@@ -42,6 +43,9 @@ if (params.cdr_electrode_set == "all") {
 } else {
     throw new IllegalArgumentException("cdr_electrode_set must be one of `all`, `n400`")
 }
+// Column names for response variables in final CDR data.
+cdr_response_columns = params.cdr_response_variables.collect { "el" + it }
+
 if (!(params.cdr_response_type in ["univariate", "multivariate"])) {
     throw new IllegalArgumentException("cdr_response_type must be one of `univariate`, `multivariate`")
 }
@@ -146,6 +150,8 @@ process simplifyCDR {
 
     script:
 
+    electrodes_str = JsonOutput.toJson(params.cdr_response_variables)
+    electrode_columns_str = JsonOutput.toJson(cdr_response_columns)
     electrodes_arr = "[" + params.cdr_response_variables.join(",") + "]"
     switch_univariate = params.cdr_response_type == "univariate" ? "True" : "False"
 """
@@ -153,15 +159,18 @@ process simplifyCDR {
 
 import pandas as pd
 
-ELECTRODES = ${electrodes_arr}
+ELECTRODES = ${electrodes_str}
 ELECTRODES = [str(el) for el in ELECTRODES]
+ELECTRODE_COLS = ${electrode_columns_str}
 
 X = pd.read_csv("${X}", sep=" ")
 y = pd.read_csv("${y}", sep=" ")
 
+y = y.rename(columns=dict(zip(ELECTRODES, ELECTRODE_COLS)))
+
 if ${switch_univariate}:
-    y["mean_response"] = y[ELECTRODES].mean(axis=1)
-    y = y.drop(columns=ELECTRODES)
+    y["mean_response"] = y[ELECTRODE_COLS].mean(axis=1)
+    y = y.drop(columns=ELECTRODE_COLS)
 
 # Zero out clock at the start of each item.
 item_times = pd.DataFrame(X.groupby(["subject", "item"]).time.min())
@@ -190,7 +199,7 @@ CDR_data_simple.into { CDR_data_simple_for_train; CDR_data_simple_for_subset }
 def makeCDRInvocation(TaskPath X, TaskPath y_train, TaskPath y_dev, TaskPath y_test) {
     response_expr = params.cdr_response_type == "univariate"
         ? "mean_response"
-        : params.cdr_response_variables.join(" + ")
+        : cdr_response_columns.join(" + ")
     predictor_expr = params.cdr_predictor_variables.join(" + ")
     formula = "${response_expr} ~ C(${predictor_expr}, NN()) + (C(${predictor_expr}, NN(ran=T)) | subject)"
 
