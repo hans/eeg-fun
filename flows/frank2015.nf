@@ -53,9 +53,9 @@ params.cdr_predictor_variables = ["rate", "surprisal", "word_freq"]
 params.cdr_series_ids = "item subject"
 params.cdr_history_length = 14
 // Fraction of items to retain when subsetting
-params.cdr_subset_item_frac = 0.2
+params.cdr_subset_item_frac = 0.3
 // Fraction of subjects to retain when subsetting
-params.cdr_subset_subject_frac = 0.5
+params.cdr_subset_subject_frac = 1
 
 /////////
 
