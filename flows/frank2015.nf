@@ -69,6 +69,18 @@ stim_file.into { stim_file_for_prep; stim_file_for_repro }
 
 /////////
 
+// Header for Python scripts which makes mfn400 import available
+PYTHON_HEADER = """
+#!/usr/bin/env python
+
+import sys
+sys.path.append("${baseDir}")
+import os
+os.environ["NUMBA_CACHE_DIR"] = "/tmp"
+"""
+
+/////////
+
 process prepareStimuli {
     label "mne"
     publishDir "${params.outdir}"
@@ -113,13 +125,7 @@ process prepareCDR {
 
     script:
 """
-#!/usr/bin/env python
-
-import sys
-sys.path.append("${baseDir}")
-
-import os
-os.environ["NUMBA_CACHE_DIR"] = "/tmp"
+${PYTHON_HEADER}
 
 from mfn400.adapters.frank2015 import FrankDatasetAdapter
 
@@ -260,7 +266,7 @@ process subsetCDR {
 
     script:
 """
-#!/usr/bin/env python
+${PYTHON_HEADER}
 
 import numpy as np
 import pandas as pd
