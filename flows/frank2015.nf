@@ -190,30 +190,30 @@ if ${switch_univariate}:
 else:
     response_indexer = ELECTRODE_COLS
 
+# Drop response regions corresponding to epochs in the Frank preprocessed
+# data that were marked as containing artifacts.
+if ${switch_zero}:
+    bad_epochs = X[X.artifact == 1]
+    bad_epochs["drop_time_min"] = bad_epochs.time + ${params.erp_epoch_window_left}
+    bad_epochs["drop_time_max"] = bad_epochs.time + ${params.erp_epoch_window_right}
+
+    # TODO is there a clean vectorized solution?
+    # Indexing on subject, item; then using custom float range on response tbl
+    for _, row in bad_epochs.iterrows():
+        y.loc[(y.subject == row.subject) &
+              (y.time >= row.drop_time_min) &
+              (y.time < row.drop_time_max), response_indexer] = np.nan
+
+    n_nanned = y[response_indexer[0]].isna().sum()
+    print(f"NaN'ed out {len(bad_epochs)} -- that's {n_nanned} response rows "
+        f"({n_nanned / len(y) * 100}%)")
+
 # Zero out clock at the start of each item.
 item_times = pd.DataFrame(X.groupby(["subject", "item"]).time.min())
 item_times["y_time"] = y.groupby(["subject", "item"]).time.min()
 item_times["min_time"] = item_times.min(axis=1)
 X.time -= X.merge(item_times, how="left", left_on=["subject", "item"], right_index=True).min_time
 y.time -= y.merge(item_times, how="left", left_on=["subject", "item"], right_index=True).min_time
-
-if ${switch_zero}:
-    bad_epochs = X[X.artifact == 1]
-    bad_epochs.drop_time_min = bad_epochs.time + ${params.erp_epoch_window_left}
-    bad_epochs.drop_time_max = bad_epochs.time + ${params.erp_epoch_window_right}
-
-    # TODO is there a clean vectorized solution?
-    # Indexing on subject_idx, sentence_idx, word_idx, then using custom float
-    # range on response table
-    for _, row in bad_epochs.iterrows():
-        y.loc[(y.subject_idx == row.subject_idx) &
-              (y.item == row.item) &
-              (y.time >= row.drop_time_min) &
-              (y.time < row.drop_time_max), response_indexer] = np.nan
-
-    n_nanned = y[response_indexer[0]].isna().sum()
-    print(f"NaN'ed out {len(bad_epochs)} -- that's {n_nanned} response rows "
-        f"({n_nanned / len(y)}%)")
 
 # Compute train/dev/test splits.
 X["modulus"] = (X["item"] + X["subject"]) % 4
