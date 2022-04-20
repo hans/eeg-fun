@@ -21,57 +21,7 @@ import seaborn as sns
 from pathlib import Path
 from functools import reduce
 
-
-# Frank data contains pre-computed response data for a variety of ERPs. We're
-# just extracting N400 data here.
-DATA_COMPONENTS = ["ELAN", "LAN", "N400", "EPNP", "P600", "PNP"]
-N400_COMPONENT_IDX = DATA_COMPONENTS.index("N400")
-
-
-def make_signal_df(data, key, target_key=None):
-    """
-    Build dataframe describing ERP signal from Frank formatted struct.
-    """
-    target_key = target_key or key
-    return pd.concat(
-        {sentence_idx: pd.DataFrame(mat[:, :, N400_COMPONENT_IDX],
-                                    index=pd.RangeIndex(mat.shape[0], name="word_idx")) \
-            .reset_index().melt(id_vars=["word_idx"], var_name="subject_idx",
-                                value_name=target_key)
-            for sentence_idx, mat in enumerate(data[key])},
-        names=["sentence_idx", "idx"]) \
-        .reset_index().drop(columns=["idx"]) \
-        .set_index(["subject_idx", "sentence_idx", "word_idx"])
-
-
-def make_feature_df(data, key, target_key=None, final_axis_name="subject_idx"):
-    target_key = target_key or key
-    return pd.concat(
-        {sentence_idx: pd.DataFrame(mat,
-                                    index=pd.RangeIndex(mat.shape[0], name="word_idx")) \
-                                    .reset_index().melt(
-                                        id_vars=["word_idx"],
-                                        var_name=final_axis_name,
-                                        value_name=target_key)
-         for sentence_idx, mat in enumerate(data[key])},
-        names=["sentence_idx", "idx"]) \
-        .reset_index().drop(columns=["idx"]) \
-        .set_index(["subject_idx", "sentence_idx", "word_idx"])
-
-
-def make_surprisal_df(data, key, target_key=None, i_offset=0):
-    target_key = target_key or key
-    return pd.concat(
-        {sentence_idx: pd.DataFrame(mat, index=pd.RangeIndex(mat.shape[0], name="word_idx"),
-                                    columns=[f"{target_key}_{i_offset+idx}" for idx in range(mat.shape[1])])
-         for sentence_idx, mat in enumerate(data[key])},
-        names=["sentence_idx", "word_idx"])
-
-
-def make_control_df(data, key):
-    return pd.concat([pd.DataFrame({key: wf}, index=pd.RangeIndex(len(wf), name="word_idx"))
-                      for idx, wf in enumerate(data[key])],
-                     names=["sentence_idx"], keys=np.arange(len(data[key])))
+from mfn400.adapters.frank2015 import make_signal_df, make_feature_df, make_surprisal_df, make_control_df
 
 
 def main(args):
