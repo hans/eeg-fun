@@ -17,6 +17,7 @@ import transformers
 from tqdm import tqdm
 
 from mfn400 import transformers_utils
+from mfn400.adapters.frank2015 import make_feature_df
 
 
 
@@ -30,6 +31,7 @@ def load_stimuli(path) -> Tuple[List[List[str]], pd.DataFrame]:
             of each sentence to each subject. Index `sentence_idx`,
             `subject_idx`; single column `presentation_idx`. All values
             are 1-based.
+        artifact: DataFrame with word-level artifact annotations.
     """
     data = scipy.io.loadmat(path, simplify_cells=True)
 
@@ -42,8 +44,17 @@ def load_stimuli(path) -> Tuple[List[List[str]], pd.DataFrame]:
         columns=pd.RangeIndex(1, order.shape[1] + 1, name="subject_idx")) \
         .melt(ignore_index=False, value_name="presentation_idx") \
         .reset_index().set_index(["sentence_idx", "subject_idx"])
+    
+    artifact_df = make_feature_df(data, "artefact") \
+        .rename(columns={"artefact": "artifact"}) \
+        .reset_index()
+    # 1-index subject, sentence
+    artifact_df["subject_idx"] += 1
+    artifact_df["sentence_idx"] += 1
+    artifact_df = artifact_df.set_index(["subject_idx", "sentence_idx",
+                                         "word_idx"])
 
-    return sentences, presentation_order
+    return sentences, presentation_order, artifact_df
 
 
 def add_control_predictors(stim_df, sentences):
@@ -66,7 +77,7 @@ def add_word_freqs(stim_df, freqs_data):
 
 
 def main(args):
-    sentences, presentation_df = load_stimuli(args.stim_path)
+    sentences, presentation_df, artifact_df = load_stimuli(args.stim_path)
 
     stim_df = pd.concat(
         [pd.DataFrame({"word": sent}) for sent in sentences],
@@ -98,6 +109,10 @@ def main(args):
 
     # Now create full presentation matrix.
     all_df = pd.merge(presentation_df, stim_df, how="left",
+                      left_index=True, right_index=True)
+    
+    # Include artifact annotations.
+    all_df = pd.merge(all_df, artifact_df, how="left",
                       left_index=True, right_index=True)
 
     all_df.to_csv(args.out_path)

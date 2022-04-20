@@ -56,6 +56,9 @@ params.cdr_history_length = 14
 params.cdr_subset_item_frac = 0.3
 // Fraction of subjects to retain when subsetting
 params.cdr_subset_subject_frac = 1
+// if true, use Frank epoch artifact annotations to NaN out regions of the
+// response data.
+params.cdr_drop_artifact_epochs = false
 
 /////////
 
@@ -63,7 +66,7 @@ params.outdir = "${baseDir}/output/frank2015"
 
 /////////
 
-// Duplicate channels for the two processing streams
+// Duplicate channels for multiple processing streams
 eeg_dir.into { eeg_dir_for_erp; eeg_dir_for_cdr }
 stim_file.into { stim_file_for_prep; stim_file_for_repro }
 
@@ -96,6 +99,7 @@ process prepareStimuli {
 """
 #!/usr/bin/env bash
 export PYTHONPATH="${baseDir}"
+export NUMBA_CACHE_DIR="/tmp"
 TRANSFORMERS_CACHE=${params.transformers_cache} python \
     ${baseDir}/scripts/frank2015_stimuli.py \
         ${stim_file} \
@@ -138,8 +142,10 @@ dataset.to_cdr("X.txt", "y.txt")
  * Preprocess stimulus and EEG response data:
  *
  * 1. Prepare response variable (electrode subsetting; spatial/temporal averaging)
- * 2. Adjust time axis (zero out at start of each item)
- * 3. Create train/dev/test split
+ * 2. Zero out time spans of response variable which are known to have
+ *    substantial artifacts
+ * 3. Adjust time axis (zero out at start of each item)
+ * 4. Create train/dev/test split
  */
 process simplifyCDR {
     label "mne"
@@ -160,9 +166,12 @@ process simplifyCDR {
     electrode_columns_str = JsonOutput.toJson(cdr_response_columns)
     electrodes_arr = "[" + params.cdr_response_variables.join(",") + "]"
     switch_univariate = params.cdr_response_type == "univariate" ? "True" : "False"
-"""
-#!/usr/bin/env python
 
+    switch_zero = params.cdr_drop_artifact_epochs ? "True" : "False"
+"""
+${PYTHON_HEADER}
+
+import numpy as np
 import pandas as pd
 
 ELECTRODES = ${electrodes_str}
@@ -177,6 +186,9 @@ y = y.rename(columns=dict(zip(ELECTRODES, ELECTRODE_COLS)))
 if ${switch_univariate}:
     y["mean_response"] = y[ELECTRODE_COLS].mean(axis=1)
     y = y.drop(columns=ELECTRODE_COLS)
+    response_indexer = ["mean_response"]
+else:
+    response_indexer = ELECTRODE_COLS
 
 # Zero out clock at the start of each item.
 item_times = pd.DataFrame(X.groupby(["subject", "item"]).time.min())
@@ -184,6 +196,24 @@ item_times["y_time"] = y.groupby(["subject", "item"]).time.min()
 item_times["min_time"] = item_times.min(axis=1)
 X.time -= X.merge(item_times, how="left", left_on=["subject", "item"], right_index=True).min_time
 y.time -= y.merge(item_times, how="left", left_on=["subject", "item"], right_index=True).min_time
+
+if ${switch_zero}:
+    bad_epochs = X[X.artifact == 1]
+    bad_epochs.drop_time_min = bad_epochs.time + ${params.erp_epoch_window_left}
+    bad_epochs.drop_time_max = bad_epochs.time + ${params.erp_epoch_window_right}
+
+    # TODO is there a clean vectorized solution?
+    # Indexing on subject_idx, sentence_idx, word_idx, then using custom float
+    # range on response table
+    for _, row in bad_epochs.iterrows():
+        y.loc[(y.subject_idx == row.subject_idx) &
+              (y.item == row.item) &
+              (y.time >= row.drop_time_min) &
+              (y.time < row.drop_time_max), response_indexer] = np.nan
+
+    n_nanned = y[response_indexer[0]].isna().sum()
+    print(f"NaN'ed out {len(bad_epochs)} -- that's {n_nanned} response rows "
+        f"({n_nanned / len(y)}%)")
 
 # Compute train/dev/test splits.
 X["modulus"] = (X["item"] + X["subject"]) % 4
