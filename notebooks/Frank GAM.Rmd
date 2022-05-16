@@ -1,0 +1,32 @@
+---
+title: "R Notebook"
+output: html_notebook
+---
+
+```{r}
+library(tidyverse)
+library(mgcv)
+library(modelbased)
+```
+
+```{r}
+df <- read_csv("../frank2015_full_epoch_data.csv")
+glimpse(df)
+```
+
+
+
+```{r}
+model <- gam(mean_response ~ s(epoch_time, bs="cr") + s(surprisal, bs="cr"),
+             data=df)
+summary(model)
+```
+
+```{r}
+model %>% 
+  modelbased::estimate_link(length=50) %>% 
+  ggplot(aes(x=epoch_time, y=Predicted, group=surprisal)) +
+    geom_line(aes(color=surprisal)) +
+    geom_ribbon(aes(ymin=CI_low, ymax=CI_high), alpha=0.2)
+```
+
