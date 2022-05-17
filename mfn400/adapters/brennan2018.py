@@ -1,3 +1,4 @@
+from importlib_resources import files
 from pathlib import Path
 import re
 from typing import Tuple, List
@@ -24,15 +25,18 @@ def build_mne_info():
       'range': 1.0,
       'cal': 1.0,
       'coil_type': 0,
-      'loc': numpy.array([0., 0., 0., 1., 0., 0., 0., 1., 0., 0., 0., 1.]),
+      'loc': np.array([0., 0., 0., 1., 0., 0., 0., 1., 0., 0., 0., 1.]),
       'unit': 107,
       'unit_mul': 0,
       'coord_frame': 0,
     }
 
     samplingrate = 500
-    montage = mne.channels.read_custom_montage('easycapM10-acti61_elec.sfp')
+    
+    montage_path = files("mfn400.resources") / "easycapM10-acti61_elec.sfp"
+    montage = mne.channels.read_custom_montage(montage_path)
     # montage.plot()
+    
     info = mne.create_info(montage.ch_names, samplingrate, 'eeg')
     info.set_montage(montage)
     info['highpass'] = 0.1
@@ -43,9 +47,6 @@ def build_mne_info():
         info['nchan'] += 1
 
     return info
-
-
-def get_usable_subjects()
 
 
 
@@ -99,7 +100,6 @@ class BrennanDatasetAdapter(MNEDatasetAdapter):
             .rename(columns=dict(Position="word_idx",
                                  Sentence="sentence_idx",
                                  Segment="segment_idx")) \
-            # Ignore redundant lagged columns
             .drop(columns=["LogFreq_Prev", "LogFreq_Next"]) \
             .set_index(["segment_idx", "sentence_idx", "word_idx"])
         # Onsets are reset between segments. Fix this.
