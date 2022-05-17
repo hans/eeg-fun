@@ -54,7 +54,7 @@ class BrennanDatasetAdapter(MNEDatasetAdapter):
     """
     Brennan et al. 2018 naturalistic N400 dataset.
 
-    EasyCap M10 Acti61 montage.
+    EasyCap M10 montage, 61 active electrodes, with actiCHamp amplifier.
 
     Recordings by subject are split into 'segments.'
     Time annotations are reset to 0 at the start of each segment, but not
@@ -90,6 +90,9 @@ class BrennanDatasetAdapter(MNEDatasetAdapter):
 
         self.use_subjects = self._get_usable_subjects(eeg_dir)
         """subjects which should be used, according to dataset annotations"""
+
+        self._mne_info = build_mne_info()
+        # TODO read out data_channels, eog_channels, misc_channels, etc. if/when necessary
 
         self._prepare_paths(eeg_dir)
 
@@ -140,7 +143,24 @@ class BrennanDatasetAdapter(MNEDatasetAdapter):
             # speech stimulus.
             self._run_ranges[subject_id] = {1: (0, self._raw_data[subject_id].n_times)}
 
-    def _load_mne_single_subject(self, subject_id, run_path) -> Tuple[mne.io.Raw, List[int]]:
+    def _load_mne_single_subject(self, subject_id: int, eeg_dir) -> Tuple[mne.io.Raw, List[int]]:
+        subject_str = "S%02i" % subject_id
+
+        proc = read_mat(eeg_dir / "proc" / f"{subject_str}.mat")["proc"]
+        assert proc["subject"] == subject_str
+        raw = mne.io.read_raw_fieldtrip(DATA_DIR / f"{subject_str}.mat",
+                                        self._mne_info, "raw")
+        raw._data *= 1e-6  # FieldTrip data in µV
+
+        # referencing
+        # TODO can/should move to preprocess?
+        assert proc["implicitref"] = "29"
+        assert proc["refchannels"] = ["25", "29"]
+        mne.add_reference_channels(raw, proc["implicitref"], False)
+        raw.set_montage(info.montage)
+        raw.set_eeg_reference(proc["refchannels"])
+
+
         info = mne.create_info(ch_names=self.all_channels,
                                sfreq=self.sample_rate,
                                ch_types=self.all_channel_types)
