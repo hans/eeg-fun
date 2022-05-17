@@ -12,41 +12,7 @@ import scipy.io
 from mfn400.adapters import MNEDatasetAdapter
 
 
-info_re = re.compile(r"S(\d+)\.mat")
-
-
-# Prepare MNE info representation
-# Copied from Eelbrain https://github.com/Eelbrain/Alice/blob/main/import_dataset/convert-all.py
-def build_mne_info():
-    ch_default = {
-      'scanno': 307,
-      'logno': 1,
-      'kind': 3,
-      'range': 1.0,
-      'cal': 1.0,
-      'coil_type': 0,
-      'loc': np.array([0., 0., 0., 1., 0., 0., 0., 1., 0., 0., 0., 1.]),
-      'unit': 107,
-      'unit_mul': 0,
-      'coord_frame': 0,
-    }
-
-    samplingrate = 500
-    
-    montage_path = files("mfn400.resources") / "easycapM10-acti61_elec.sfp"
-    montage = mne.channels.read_custom_montage(montage_path)
-    # montage.plot()
-    
-    info = mne.create_info(montage.ch_names, samplingrate, 'eeg')
-    info.set_montage(montage)
-    info['highpass'] = 0.1
-    info['lowpass'] = 200
-    for ch_name in ['VEOG', 'Aux5', 'AUD']:
-        info['chs'].append({**ch_default, 'ch_name': ch_name})
-        info['ch_names'].append(ch_name)
-        info['nchan'] += 1
-
-    return info
+info_re = re.compile(r"S(\d+)")
 
 
 
@@ -56,11 +22,11 @@ class BrennanDatasetAdapter(MNEDatasetAdapter):
 
     EasyCap M10 montage, 61 active electrodes, with actiCHamp amplifier.
 
-    Recordings by subject are split into 'segments.'
-    Time annotations are reset to 0 at the start of each segment, but not
-    between sentences / words.
+    Data contains annotations for all words. Each annotation is of the format
+    `<sentence_idx>_<word_idx>` .
 
-    stim_df is indexed by segment_idx, sentence_idx, word_idx
+    stim_df is indexed by segment_idx, sentence_idx, word_idx (all 1-indexed).
+    Note that sentence_idxs do not overlap across segments.
     """
 
     name = "brennan2018"
@@ -86,17 +52,9 @@ class BrennanDatasetAdapter(MNEDatasetAdapter):
     filter_window = None
 
     def __init__(self, eeg_dir):
-        eeg_dir = Path(eeg_dir)
+        eeg_dir = self.eeg_dir = Path(eeg_dir)
 
-        self.use_subjects = self._get_usable_subjects(eeg_dir)
-        """subjects which should be used, according to dataset annotations"""
-
-        self._mne_info = build_mne_info()
-        # TODO read out data_channels, eog_channels, misc_channels, etc. if/when necessary
-
-        self._prepare_paths(eeg_dir)
-
-        stim_path = eeg_dir / "AliceChapterOne-EEG.csv"
+        stim_path = eeg_dir / "stimuli" / "AliceChapterOne-EEG.csv"
         self._stim_df = pd.read_csv(
             stim_path,
             index_col=None) \
@@ -105,98 +63,59 @@ class BrennanDatasetAdapter(MNEDatasetAdapter):
                                  Segment="segment_idx")) \
             .drop(columns=["LogFreq_Prev", "LogFreq_Next"]) \
             .set_index(["segment_idx", "sentence_idx", "word_idx"])
-        # Onsets are reset between segments. Fix this.
-        # TODO make sure we're doing this correctly -- using offset of previous segment.
-        segment_onsets = self._stim_df.groupby("segment_idx").offset.max() \
-            .shift(1).fillna(0.).cumsum()
-        self._stim_df.onset += segment_onsets
-        self._stim_df.offset += segment_onsets
-        # Segments are no longer useful. Drop.
-        self._stim_df = self._stim_df.droplevel("segment_idx")
+        
+        self._presentation_dfs = {}
 
         self._load_mne()
-
-    def _get_usable_subjects(self, eeg_dir) -> List[int]:
-        datasets = read_mat(eeg_dir / "datasets.mat")
-        return [int(s[1:3].lstrip("0")) for s in datasets["use"]]
-
-    def _prepare_paths(self, eeg_dir):
-        eeg_paths = sorted(eeg_dir.glob("S*.mat"))
-        eeg_paths = {info_re.match(p.name).group(1).lstrip("0"): p
-                     for p in eeg_paths}
-
-        eeg_paths = {idx: path for idx, path in eeg_paths.items()
-                     if idx in self.use_subjects}
-
-        self._eeg_paths = eeg_paths
 
     def _load_mne(self):
         """
         Load MNE continuous representation.
         """
         self._raw_data, self._annots, self._run_ranges = {}, {}, {}
-        for subject_id, run_paths in self._eeg_paths.items():
-            self._raw_data[subject_id], self._annots[subject_id] = \
-                self._load_mne_single_subject(subject_id, run_paths)
+        for subject_dir in (self.eeg_dir / "eeg").glob("S*", ):
+            subject_id = int(info_re.match(subject_dir.name).group(1).lstrip("0"))
+            print(subject_id)
+            self._raw_data[subject_id], self._presentation_dfs[subject_id] = \
+                self._load_mne_single_subject(subject_id, subject_dir)
 
             # Dummy annotation: we have just one "run" per subject of continuous
             # speech stimulus.
             self._run_ranges[subject_id] = {1: (0, self._raw_data[subject_id].n_times)}
 
-    def _load_mne_single_subject(self, subject_id: int, eeg_dir) -> Tuple[mne.io.Raw, List[int]]:
-        subject_str = "S%02i" % subject_id
+    def _load_mne_single_subject(self, subject_id: int, path) -> Tuple[mne.io.Raw, List[int]]:
+        raw = mne.io.read_raw(path / ("S%02i_alice-raw.fif" % subject_id),
+                              preload=True)
+        
+        # Prepare presentation df, specifying when this particular subject
+        # observed each particular word.
+        
+        # Load segments; word onsets will be computed relative to segment annotation points.
+        n_segment_annotations = len(raw.annotations)
+        segment_data = pd.DataFrame(list(raw.annotations))
+        segment_data["description"] = segment_data.description.astype(int)
+        segment_data = segment_data.set_index("description")
+        segment_data.index.name = "segment_idx"
 
-        proc = read_mat(eeg_dir / "proc" / f"{subject_str}.mat")["proc"]
-        assert proc["subject"] == subject_str
-        raw = mne.io.read_raw_fieldtrip(DATA_DIR / f"{subject_str}.mat",
-                                        self._mne_info, "raw")
-        raw._data *= 1e-6  # FieldTrip data in µV
-
-        # referencing
-        # TODO can/should move to preprocess?
-        assert proc["implicitref"] = "29"
-        assert proc["refchannels"] = ["25", "29"]
-        mne.add_reference_channels(raw, proc["implicitref"], False)
-        raw.set_montage(info.montage)
-        raw.set_eeg_reference(proc["refchannels"])
-
-
-        info = mne.create_info(ch_names=self.all_channels,
-                               sfreq=self.sample_rate,
-                               ch_types=self.all_channel_types)
-        raw = mne.io.read_raw_fieldtrip(run_path, info=info, data_name="raw")
-
+        presentation_df = self.stimulus_df.copy()
+        presentation_df["onset"] += segment_data.onset
+        presentation_df["offset"] += segment_data.onset
+        
+        # Remove segment annotations ; we want just the words.
+        raw.annotations.delete(np.arange(n_segment_annotations))
+        
         # Add annotations based on stim_df.
-        for (sentence_idx, word_idx), row in self.stimulus_df.iterrows():
+        for (segment_idx, sentence_idx, word_idx), row in presentation_df.iterrows():
             raw.annotations.append(row.onset, row.offset - row.onset,
                                    description=f"{sentence_idx}_{word_idx}")
 
-        # Load annotations from authors' preprocessing.
-        annots_path = run_path.parent / "proc" / run_path.name
-        assert annots_path.exists(), f"Missing proc/{run_path.name}"
-        annots = scipy.io.loadmat(annots_path, simplify_cells=True)["proc"]
-
-        return raw, annots
+        return raw, presentation_df
 
     def _preprocess(self, subject_id) -> mne.io.Raw:
-        raw = self._raw_data[subject_id]
-        annots = self._annots[subject_id]
-
-        # TODO filtering?
-
-        # Re-reference
-        reference_channels = set(annots["refchannels"]) & set(raw.info["ch_names"])
-        if len(reference_channels) > 0:
-            mne.set_eeg_reference(raw, reference_channels)
-
-        # Subset channels, based on their manual analysis
-        pick_channels = annots["rejections"]["final"]["chanpicks"]
-        raw = raw.pick_channels(pick_channels)
-
-        return raw
+        return self._raw_data[subject_id]
 
     def get_presentation_data(self, subject_id) -> pd.DataFrame:
-        return self.stimulus_df.copy()
+        return self._presentation_dfs[subject_id]
 
     @property
     def stimulus_df(self) -> pd.DataFrame:
