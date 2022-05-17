@@ -5,12 +5,48 @@ from typing import Tuple, List
 import mne
 import numpy as np
 import pandas as pd
+from pymatreader import read_mat
 import scipy.io
 
 from mfn400.adapters import MNEDatasetAdapter
 
 
 info_re = re.compile(r"S(\d+)\.mat")
+
+
+# Prepare MNE info representation
+# Copied from Eelbrain https://github.com/Eelbrain/Alice/blob/main/import_dataset/convert-all.py
+def build_mne_info():
+    ch_default = {
+      'scanno': 307,
+      'logno': 1,
+      'kind': 3,
+      'range': 1.0,
+      'cal': 1.0,
+      'coil_type': 0,
+      'loc': numpy.array([0., 0., 0., 1., 0., 0., 0., 1., 0., 0., 0., 1.]),
+      'unit': 107,
+      'unit_mul': 0,
+      'coord_frame': 0,
+    }
+
+    samplingrate = 500
+    montage = mne.channels.read_custom_montage('easycapM10-acti61_elec.sfp')
+    # montage.plot()
+    info = mne.create_info(montage.ch_names, samplingrate, 'eeg')
+    info.set_montage(montage)
+    info['highpass'] = 0.1
+    info['lowpass'] = 200
+    for ch_name in ['VEOG', 'Aux5', 'AUD']:
+        info['chs'].append({**ch_default, 'ch_name': ch_name})
+        info['ch_names'].append(ch_name)
+        info['nchan'] += 1
+        
+    return info
+
+
+def get_usable_subjects()
+
 
 
 class BrennanDatasetAdapter(MNEDatasetAdapter):
@@ -38,18 +74,16 @@ class BrennanDatasetAdapter(MNEDatasetAdapter):
         (["eog"] * len(eog_channels)) + \
         (["misc"] * len(misc_channels))
     
-    # subjects which should be used, according to dataset annotations
-    use_subjects = ['1', '10', '11', '12', '13', '14', '15', '16', '17', '18',
-                    '19', '20', '21', '22', '25', '26', '3', '34', '35', '36',
-                    '37', '38', '39', '4', '40', '41', '42', '44', '45', '48',
-                    '5', '6', '8']
-
     montage = "easycap-M10"
     sample_rate = 500
     filter_window = None
 
     def __init__(self, eeg_dir):
         eeg_dir = Path(eeg_dir)
+        
+        self.usable_subjects = self._get_usable_subjects(eeg_dir)
+        """subjects which should be used, according to dataset annotations"""
+        
         self._prepare_paths(eeg_dir)
 
         stim_path = eeg_dir / "AliceChapterOne-EEG.csv"
@@ -71,6 +105,10 @@ class BrennanDatasetAdapter(MNEDatasetAdapter):
         self._stim_df = self._stim_df.droplevel("segment_idx")
 
         self._load_mne()
+        
+    def _get_usable_subjects(self, eeg_dir) -> List[int]:
+        datasets = read_mat(eeg_dir / "datasets.mat")
+        return [int(s[1:3].lstrip("0")) for s in datasets["use"]]
 
     def _prepare_paths(self, eeg_dir):
         eeg_paths = sorted(eeg_dir.glob("S*.mat"))
