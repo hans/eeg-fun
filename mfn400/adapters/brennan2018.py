@@ -41,7 +41,7 @@ def build_mne_info():
         info['chs'].append({**ch_default, 'ch_name': ch_name})
         info['ch_names'].append(ch_name)
         info['nchan'] += 1
-        
+
     return info
 
 
@@ -53,7 +53,13 @@ class BrennanDatasetAdapter(MNEDatasetAdapter):
     """
     Brennan et al. 2018 naturalistic N400 dataset.
 
-    TODO what montage?
+    EasyCap M10 Acti61 montage.
+
+    Recordings by subject are split into 'segments.'
+    Time annotations are reset to 0 at the start of each segment, but not
+    between sentences / words.
+
+    stim_df is indexed by segment_idx, sentence_idx, word_idx
     """
 
     name = "brennan2018"
@@ -73,17 +79,17 @@ class BrennanDatasetAdapter(MNEDatasetAdapter):
     all_channel_types = (["eeg"] * len(data_channels)) + \
         (["eog"] * len(eog_channels)) + \
         (["misc"] * len(misc_channels))
-    
+
     montage = "easycap-M10"
     sample_rate = 500
     filter_window = None
 
     def __init__(self, eeg_dir):
         eeg_dir = Path(eeg_dir)
-        
-        self.usable_subjects = self._get_usable_subjects(eeg_dir)
+
+        self.use_subjects = self._get_usable_subjects(eeg_dir)
         """subjects which should be used, according to dataset annotations"""
-        
+
         self._prepare_paths(eeg_dir)
 
         stim_path = eeg_dir / "AliceChapterOne-EEG.csv"
@@ -93,6 +99,7 @@ class BrennanDatasetAdapter(MNEDatasetAdapter):
             .rename(columns=dict(Position="word_idx",
                                  Sentence="sentence_idx",
                                  Segment="segment_idx")) \
+            # Ignore redundant lagged columns
             .drop(columns=["LogFreq_Prev", "LogFreq_Next"]) \
             .set_index(["segment_idx", "sentence_idx", "word_idx"])
         # Onsets are reset between segments. Fix this.
@@ -105,7 +112,7 @@ class BrennanDatasetAdapter(MNEDatasetAdapter):
         self._stim_df = self._stim_df.droplevel("segment_idx")
 
         self._load_mne()
-        
+
     def _get_usable_subjects(self, eeg_dir) -> List[int]:
         datasets = read_mat(eeg_dir / "datasets.mat")
         return [int(s[1:3].lstrip("0")) for s in datasets["use"]]
@@ -114,7 +121,7 @@ class BrennanDatasetAdapter(MNEDatasetAdapter):
         eeg_paths = sorted(eeg_dir.glob("S*.mat"))
         eeg_paths = {info_re.match(p.name).group(1).lstrip("0"): p
                      for p in eeg_paths}
-        
+
         eeg_paths = {idx: path for idx, path in eeg_paths.items()
                      if idx in self.use_subjects}
 
@@ -138,7 +145,7 @@ class BrennanDatasetAdapter(MNEDatasetAdapter):
                                sfreq=self.sample_rate,
                                ch_types=self.all_channel_types)
         raw = mne.io.read_raw_fieldtrip(run_path, info=info, data_name="raw")
-        
+
         # Add annotations based on stim_df.
         for (sentence_idx, word_idx), row in self.stimulus_df.iterrows():
             raw.annotations.append(row.onset, row.offset - row.onset,
@@ -161,7 +168,7 @@ class BrennanDatasetAdapter(MNEDatasetAdapter):
         reference_channels = set(annots["refchannels"]) & set(raw.info["ch_names"])
         if len(reference_channels) > 0:
             mne.set_eeg_reference(raw, reference_channels)
-        
+
         # Subset channels, based on their manual analysis
         pick_channels = annots["rejections"]["final"]["chanpicks"]
         raw = raw.pick_channels(pick_channels)
