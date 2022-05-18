@@ -2,7 +2,7 @@
 title: "R Notebook"
 output: html_notebook
 args:
-  file: "../brennan_erp_n400.csv"
+  file: "brennan_erp_n400.csv"
 ---
 
 ```{r}
@@ -13,23 +13,25 @@ library(broom.mixed)
 ```
 
 ```{r}
-df <- read_csv(params$file)
+df <- read_csv(params$file,
+               col_types=cols(AUD=col_double(),
+                              AUD_baseline=col_double()))
 glimpse(df)
 ```
 
 
 ```{r}
 # NB removed interaction of frequency * length from random effects to get convergence
-base_model = lmer(n400 ~ LogFreq * Length + our_baseline + (1 | sentence_idx),# + (LogFreq + Length | subject_idx),
+base_model = lmer(n400 ~ LogFreq * Length + our_baseline + (1 | sentence_idx) + (1 | subject_idx),
                   control=lmerControl(optimizer="bobyqa", optCtrl=list(maxfun=100000)),
                   data=df)
 summary(base_model)
 ```
 
 ```{r}
-model_their_surprisals = lmer(n400 ~ RNN + LogFreq * Length + our_baseline + (1 | sentence_idx),# + (LogFreq + Length + RNN | subject_idx),
+model_their_surprisals = lmer(n400 ~ RNN + LogFreq * Length + our_baseline + (1 | sentence_idx) + (1 | subject_idx),# + (LogFreq + Length + RNN | subject_idx),
              control=lmerControl(optimizer="bobyqa", optCtrl=list(maxfun=100000)),
-             data=df)
+             data=df %>% mutate(n400=n400 / 1e3, our_baseline=our_baseline/ 1e3))
 summary(model_their_surprisals)
 ```
 
