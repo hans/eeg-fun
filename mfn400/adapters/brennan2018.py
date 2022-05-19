@@ -11,7 +11,9 @@ import scipy.io
 from tqdm.auto import tqdm
 
 from mfn400.adapters import MNEDatasetAdapter
+from mfn400.logging import make_logger
 
+L = make_logger(__name__)
 
 info_re = re.compile(r"S(\d+)")
 
@@ -76,7 +78,8 @@ class BrennanDatasetAdapter(MNEDatasetAdapter):
 
         for subject_dir in tqdm(paths, "loading subject data"):
             subject_id = int(info_re.match(subject_dir.name).group(1).lstrip("0"))
-            print(subject_id)
+            L.debug("Loading subject %i", subject_id)
+
             self._raw_data[subject_id], self._presentation_dfs[subject_id] = \
                 self._load_mne_single_subject(subject_id, subject_dir)
 
@@ -114,6 +117,7 @@ class BrennanDatasetAdapter(MNEDatasetAdapter):
 
     def _preprocess(self, subject_id,
                     filter_window: Tuple[float, float]) -> mne.io.Raw:
+        L.debug("Preprocessing subject %i", subject_id)
         raw = self._raw_data[subject_id]
 
         # Band-pass filter.
