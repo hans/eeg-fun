@@ -6,7 +6,10 @@ import numpy as np
 import pandas as pd
 from tqdm.auto import tqdm
 
+from mfn400.logging import make_logger
 from mfn400.n400 import prepare_erp_df
+
+L = make_logger(__name__)
 
 
 class DatasetAdapter(object):
@@ -110,6 +113,7 @@ class MNEDatasetAdapter(DatasetAdapter):
                                   epoch_window: Tuple[float, float],
                                   baseline,
                                   **preprocessing_kwargs) -> mne.Epochs:
+        L.debug("to_epochs for subject %i", subject_id)
         raw = self._raw_data[subject_id]
         events, event_id = mne.events_from_annotations(raw, verbose=False)
 

@@ -2077,9 +2077,16 @@ df %&gt;%
 <!-- rnb-source-begin eyJkYXRhIjoiYGBgclxuYW5vdmEobW9kZWxfdGhlaXJfc3VycHJpc2FscywgYmFzZV9tb2RlbCwgcmVmaXQ9RkFMU0UpXG5gYGAifQ== -->
 <pre class="r"><code>anova(model_their_surprisals, base_model, refit=FALSE)</code></pre>
 <!-- rnb-source-end -->
-<!-- rnb-output-begin eyJkYXRhIjoiRXJyb3IgaW4gYW5vdmEubWVyTW9kKG1vZGVsX3RoZWlyX3N1cnByaXNhbHMsIGJhc2VfbW9kZWwsIHJlZml0ID0gRkFMU0UpIDogXG4gIG1vZGVscyB3ZXJlIG5vdCBhbGwgZml0dGVkIHRvIHRoZSBzYW1lIHNpemUgb2YgZGF0YXNldFxuIn0= -->
-<pre><code>Error in anova.merMod(model_their_surprisals, base_model, refit = FALSE) : 
-  models were not all fitted to the same size of dataset</code></pre>
+<!-- rnb-output-begin eyJkYXRhIjoiRGF0YTogZGZcbk1vZGVsczpcbmJhc2VfbW9kZWw6IG40MDAgfiBMb2dGcmVxICogTGVuZ3RoICsgb3VyX2Jhc2VsaW5lICsgKDEgfCBzZW50ZW5jZV9pZHgpICsgXG5iYXNlX21vZGVsOiAgICAgKDEgfCBzdWJqZWN0X2lkeClcbm1vZGVsX3RoZWlyX3N1cnByaXNhbHM6IG40MDAgfiBSTk4gKyBMb2dGcmVxICogTGVuZ3RoICsgb3VyX2Jhc2VsaW5lICsgKDEgfCBzZW50ZW5jZV9pZHgpICsgXG5tb2RlbF90aGVpcl9zdXJwcmlzYWxzOiAgICAgKDEgfCBzdWJqZWN0X2lkeClcbiAgICAgICAgICAgICAgICAgICAgICAgbnBhciAgICBBSUMgICAgQklDIGxvZ0xpayBkZXZpYW5jZSBDaGlzcSBEZiBQcig+Q2hpc3EpXG5iYXNlX21vZGVsICAgICAgICAgICAgICAgIDggMTcwMDM1IDE3MDA5OSAtODUwMTAgICAxNzAwMTkgICAgICAgICAgICAgICAgICAgIFxubW9kZWxfdGhlaXJfc3VycHJpc2FscyAgICA5IDE3MDAzOCAxNzAxMDkgLTg1MDEwICAgMTcwMDIwICAgICAwICAxICAgICAgICAgIDFcbiJ9 -->
+<pre><code>Data: df
+Models:
+base_model: n400 ~ LogFreq * Length + our_baseline + (1 | sentence_idx) + 
+base_model:     (1 | subject_idx)
+model_their_surprisals: n400 ~ RNN + LogFreq * Length + our_baseline + (1 | sentence_idx) + 
+model_their_surprisals:     (1 | subject_idx)
+                       npar    AIC    BIC logLik deviance Chisq Df Pr(&gt;Chisq)
+base_model                8 170035 170099 -85010   170019                    
+model_their_surprisals    9 170038 170109 -85010   170020     0  1          1</code></pre>
 <!-- rnb-output-end -->
 <!-- rnb-chunk-end -->
 <!-- rnb-text-begin -->
