@@ -31,7 +31,7 @@ summary(base_model)
 ```{r}
 model_their_surprisals = lmer(n400 ~ RNN + LogFreq * Length + our_baseline + (1 | sentence_idx) + (1 | subject_idx),# + (LogFreq + Length + RNN | subject_idx),
              control=lmerControl(optimizer="bobyqa", optCtrl=list(maxfun=100000)),
-             data=df %>% mutate(n400=n400 / 1e3, our_baseline=our_baseline/ 1e3))
+             data=df)
 summary(model_their_surprisals)
 ```
 
@@ -43,6 +43,6 @@ summary(model)
 ```
 
 ```{r}
-anova(model, base_model, refit=FALSE)
+anova(model_their_surprisals, base_model, refit=FALSE)
 ```
 
