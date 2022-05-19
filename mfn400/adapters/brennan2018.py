@@ -8,13 +8,12 @@ import numpy as np
 import pandas as pd
 from pymatreader import read_mat
 import scipy.io
+from tqdm.auto import tqdm
 
 from mfn400.adapters import MNEDatasetAdapter
 
 
 info_re = re.compile(r"S(\d+)")
-
-
 
 class BrennanDatasetAdapter(MNEDatasetAdapter):
     """
@@ -63,7 +62,7 @@ class BrennanDatasetAdapter(MNEDatasetAdapter):
                                  Segment="segment_idx")) \
             .drop(columns=["LogFreq_Prev", "LogFreq_Next"]) \
             .set_index(["segment_idx", "sentence_idx", "word_idx"])
-        
+
         self._presentation_dfs = {}
 
         self._load_mne()
@@ -73,7 +72,9 @@ class BrennanDatasetAdapter(MNEDatasetAdapter):
         Load MNE continuous representation.
         """
         self._raw_data, self._annots, self._run_ranges = {}, {}, {}
-        for subject_dir in (self.eeg_dir / "eeg").glob("S*", ):
+        paths = list((self.eeg_dir / "eeg").glob("S*", ))
+
+        for subject_dir in tqdm(paths, "loading subject data"):
             subject_id = int(info_re.match(subject_dir.name).group(1).lstrip("0"))
             print(subject_id)
             self._raw_data[subject_id], self._presentation_dfs[subject_id] = \
@@ -86,10 +87,10 @@ class BrennanDatasetAdapter(MNEDatasetAdapter):
     def _load_mne_single_subject(self, subject_id: int, path) -> Tuple[mne.io.Raw, List[int]]:
         raw = mne.io.read_raw(path / ("S%02i_alice-raw.fif" % subject_id),
                               preload=True)
-        
+
         # Prepare presentation df, specifying when this particular subject
         # observed each particular word.
-        
+
         # Load segments; word onsets will be computed relative to segment annotation points.
         n_segment_annotations = len(raw.annotations)
         segment_data = pd.DataFrame(list(raw.annotations))
@@ -100,10 +101,10 @@ class BrennanDatasetAdapter(MNEDatasetAdapter):
         presentation_df = self.stimulus_df.copy()
         presentation_df["onset"] += segment_data.onset
         presentation_df["offset"] += segment_data.onset
-        
+
         # Remove segment annotations ; we want just the words.
         raw.annotations.delete(np.arange(n_segment_annotations))
-        
+
         # Add annotations based on stim_df.
         for (segment_idx, sentence_idx, word_idx), row in presentation_df.iterrows():
             raw.annotations.append(row.onset, row.offset - row.onset,

@@ -4,6 +4,7 @@ from typing import Tuple, Optional, Dict, List
 import mne
 import numpy as np
 import pandas as pd
+from tqdm.auto import tqdm
 
 from mfn400.n400 import prepare_erp_df
 
@@ -91,7 +92,7 @@ class MNEDatasetAdapter(DatasetAdapter):
         if self.preprocessed:
             raise RuntimeError("run_preprocessing was already called.")
 
-        for idx in self._raw_data:
+        for idx in tqdm(self._raw_data, desc="preprocessing subjects"):
             self._raw_data[idx] = self._preprocess(idx, **kwargs)
 
         self.preprocessed = True
@@ -132,7 +133,7 @@ class MNEDatasetAdapter(DatasetAdapter):
             subject_id: self._to_epochs_single_subject(
                 subject_id, epoch_window, baseline=baseline,
                 **preprocessing_kwargs)
-            for subject_id in self._raw_data
+            for subject_id in tqdm(self._raw_data, desc="to_epochs")
         }
         return epochs
 
@@ -166,7 +167,7 @@ class MNEDatasetAdapter(DatasetAdapter):
                             apply_baseline=apply_baseline,
                             baseline=baseline_window) \
              .drop(columns=["subject_idx"], errors="ignore")
-             for subject in epochs],
+             for subject in tqdm(epochs, desc="preparing ERP df")],
             names=["subject_idx", "index"],
             keys=[int(idx) for idx in epochs.keys()]
         )
