@@ -98,12 +98,16 @@ class BrennanDatasetAdapter(MNEDatasetAdapter):
         n_segment_annotations = len(raw.annotations)
         segment_data = pd.DataFrame(list(raw.annotations))
         segment_data["description"] = segment_data.description.astype(int)
-        segment_data = segment_data.set_index("description")
+        segment_data = segment_data.set_index("description") \
+            .rename(columns={"onset": "segment_onset"})
         segment_data.index.name = "segment_idx"
 
-        presentation_df = self.stimulus_df.copy()
-        presentation_df["onset"] += segment_data.onset
-        presentation_df["offset"] += segment_data.onset
+        presentation_df = pd.merge(self.stimulus_df, segment_data[["segment_onset"]],
+                                   how="inner",
+                                   left_index=True, right_index=True)
+        presentation_df["onset"] += presentation_df.segment_onset
+        presentation_df["offset"] += presentation_df.segment_onset
+        presentation_df = presentation_df.drop(columns=["segment_onset"])
 
         # Remove segment annotations ; we want just the words.
         raw.annotations.delete(np.arange(n_segment_annotations))
