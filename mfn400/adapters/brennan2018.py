@@ -112,8 +112,17 @@ class BrennanDatasetAdapter(MNEDatasetAdapter):
 
         return raw, presentation_df
 
-    def _preprocess(self, subject_id) -> mne.io.Raw:
-        return self._raw_data[subject_id]
+    def _preprocess(self, subject_id,
+                    filter_window: Tuple[float, float]) -> mne.io.Raw:
+        raw = self._raw_data[subject_id]
+
+        # Band-pass filter.
+        raw = raw.filter(*filter_window)
+
+        # Interpolate bad channels.
+        raw = raw.interpolate_bads()
+
+        return raw
 
     def get_presentation_data(self, subject_id) -> pd.DataFrame:
         return self._presentation_dfs[subject_id]
