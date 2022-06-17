@@ -107,7 +107,6 @@ class BrennanDatasetAdapter(MNEDatasetAdapter):
                                    left_index=True, right_index=True)
         presentation_df["onset"] += presentation_df.segment_onset
         presentation_df["offset"] += presentation_df.segment_onset
-        presentation_df = presentation_df.drop(columns=["segment_onset"])
 
         # Remove segment annotations ; we want just the words.
         raw.annotations.delete(np.arange(n_segment_annotations))
