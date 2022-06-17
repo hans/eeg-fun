@@ -27,20 +27,29 @@ df %>% filter(abs(n400) < 10) %>%
   ggplot(aes(x=RNN, y=n400)) +
     geom_point()
 ```
+```{r}
+df %>% 
+  ggplot(aes(x=as.factor(subject_idx), y=our_baseline)) + geom_boxplot()
+```
+```{r}
+df %>% filter(!(subject_idx %in% c(26, 44))) %>% 
+  ggplot(aes(x=as.factor(subject_idx), y=our_baseline)) + geom_boxplot()
+```
 
 
 ```{r}
 # NB removed interaction of frequency * length from random effects to get convergence
 base_model = lmer(n400 ~ LogFreq * Length + our_baseline + (1 | sentence_idx) + (1 | subject_idx),
                   control=lmerControl(optimizer="bobyqa", optCtrl=list(maxfun=100000)),
-                  data=df %>% filter(abs(n400) < 10))
+                  data=df)
 summary(base_model)
 ```
+
 
 ```{r}
 model_their_surprisals = lmer(n400 ~ RNN + LogFreq * Length + our_baseline + (1 | sentence_idx) + (1 | subject_idx),# + (LogFreq + Length + RNN | subject_idx),
              control=lmerControl(optimizer="bobyqa", optCtrl=list(maxfun=100000)),
-             data=df %>% filter(abs(n400) < 10))
+             data=df)
 summary(model_their_surprisals)
 ```
 
