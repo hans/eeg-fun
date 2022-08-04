@@ -11,7 +11,7 @@ import scipy.io
 from tqdm.auto import tqdm
 
 from mfn400.adapters import MNEDatasetAdapter
-from mfn400.logging import make_logger
+from mfn400.logging_utils import make_logger
 
 L = make_logger(__name__)
 
