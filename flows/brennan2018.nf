@@ -9,6 +9,7 @@ eeg_dir = Channel.fromPath(params.data_dir)
 stim_df = Channel.fromPath("${params.data_dir}/stimuli/AliceChapterOne-EEG.csv")
 raw_text = Channel.fromPath("${baseDir}/data/texts/alice-ch1.txt")
 
+word_freqs = Channel.fromPath("${baseDir}/data/wikitext-2_train_vocab.txt")
 params.language_model = "EleutherAI/gpt-neo-125M"
 params.transformers_cache = "${baseDir}/transformers_cache"
 
@@ -40,6 +41,7 @@ process prepareStimuli {
     input:
     file stim_df from stim_df
     file raw_text from raw_text
+    file word_freqs from word_freqs
 
     output:
     file("stim_df_with_surprisals.csv") into stim_df_with_surprisals
@@ -50,7 +52,8 @@ process prepareStimuli {
 TRANSFORMERS_CACHE=${params.transformers_cache} python \
     ${baseDir}/scripts/brennan2018_stimuli.py \
     ${stim_df} ${raw_text} \
-    --model ${params.language_model} \
+    --model ${params.language_model} \\
+    --word-freqs-path ${word_freqs} \\
     -o stim_df_with_surprisals.csv
 """
 }

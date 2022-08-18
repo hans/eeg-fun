@@ -235,7 +235,7 @@ def main(args):
     # Merge stim df with surprisals.
     surp_mapping["token"] = surp_mapping.global_text_tok_idx.map(dict(enumerate(tokens_flat)))
     stim_df = pd.merge(stim_df, surp_mapping.groupby(["global_text_tok_idx"]).surprisal.sum(),
-                   how="left", left_on="tok_pos", right_index=True)
+                       how="left", left_on="tok_pos", right_index=True)
 
     add_control_predictors(stim_df, sentences)
 

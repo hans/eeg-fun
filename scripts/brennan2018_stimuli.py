@@ -193,6 +193,27 @@ def compute_surprisals(stim_df: pd.DataFrame, sentences: List[List[str]],
     return surp_mapping
 
 
+def add_word_freqs(stim_df, freqs_data):
+    """
+    Add word frequency data from `freqs_path` (one word type per line;
+    `<word>\\t<freq>`)
+    """
+    word_freqs = {}
+    with open(freqs_data) as f:
+        for line in f:
+            if line.strip():
+                word, freq = line.strip().split("\t")
+                word_freqs[word] = int(freq)
+
+    # Compute frequency-based log2 surprisal.
+    total_freq = sum(word_freqs.values())
+    word_surps = {word: -np.log2(freq / total_freq)
+                  for word, freq in word_freqs.items()}
+
+    stim_df["word_freq"] = stim_df.Word.str.lower().map(word_freqs)
+    stim_df["word_freq_surp"] = stim_df.Word.str.lower().map(word_surps)
+
+
 def main(args):
     stim_df = pd.read_csv(args.stim_path)
     sentences, tokens_flat = preprocess_text(args.fulltext_path)
@@ -209,6 +230,9 @@ def main(args):
     surp_mapping["token"] = surp_mapping.global_text_tok_idx.map(dict(enumerate(tokens_flat)))
     stim_df = pd.merge(stim_df, surp_mapping.groupby(["global_text_tok_idx"]).surprisal.sum(),
                        how="left", left_on="tok_pos", right_index=True)
+
+    if args.word_freqs_path:
+        add_word_freqs(stim_df, args.word_freqs_path)
 
     stim_df.to_csv(args.out_path, index=False)
 
