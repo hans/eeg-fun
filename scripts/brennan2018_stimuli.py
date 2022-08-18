@@ -20,10 +20,6 @@ from tqdm.auto import tqdm
 import transformers
 # -
 
-# DEV
-args = Namespace(stim_path=Path("../data/AliceChapterOne-EEG.csv"),
-                 fulltext_path=Path("../data/texts/alice-ch1.txt"))
-
 
 # +
 def preprocess_text(fulltext_path: Path):

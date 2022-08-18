@@ -6,6 +6,8 @@ baseDir = workflow.launchDir
 params.data_dir = "/om/data/public/language-eeg/brennan2018-v2"
 
 eeg_dir = Channel.fromPath(params.data_dir)
+stim_df = Channel.fromPath("${params.data_dir}/stimuli/AliceChapterOne-EEG.csv")
+raw_text = Channel.fromPath("${baseDir}/data/texts/alice-ch1.txt")
 
 params.language_model = "EleutherAI/gpt-neo-125M"
 params.transformers_cache = "${baseDir}/transformers_cache"
@@ -31,32 +33,27 @@ eeg_dir.into { eeg_dir_for_erp }
 
 /////////
 
-/*
 process prepareStimuli {
-    label "mne"
+    conda "/home/jgauthie/.conda/envs/huggingface"
     publishDir "${params.outdir}"
 
     input:
-    file stim_file from stim_file_for_prep
-    file word_freqs from word_freqs
+    file stim_df from stim_df
+    file raw_text from raw_text
 
     output:
-    file("stim_df.csv") into stim_df
+    file("stim_df_with_surprisals.csv") into stim_df_with_surprisals
 
     script:
 """
 #!/usr/bin/env bash
-export PYTHONPATH="${baseDir}"
 TRANSFORMERS_CACHE=${params.transformers_cache} python \
-    ${baseDir}/scripts/frank2015_stimuli.py \
-        ${stim_file} \
-        --model ${params.language_model} \
-        --word-freqs-path ${word_freqs} \
-        -o stim_df.csv
+    ${baseDir}/scripts/brennan2018_stimuli.py \
+    ${stim_df} ${raw_text} \
+    --model ${params.language_model} \
+    -o stim_df_with_surprisals.csv
 """
-}*/
-
-stim_df.into { stim_df_for_erp }
+}
 
 process prepareERP {
     label "mne"
@@ -67,7 +64,7 @@ process prepareERP {
 
     input:
     file eeg_dir from eeg_dir_for_erp
-    file stim_df from stim_df_for_erp
+    file stim_df from stim_df_with_surprisals
 
     output:
     file "erp_full.csv" into erp_df
