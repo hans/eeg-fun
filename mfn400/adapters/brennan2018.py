@@ -52,10 +52,13 @@ class BrennanDatasetAdapter(MNEDatasetAdapter):
     sample_rate = 500
     filter_window = None
 
-    def __init__(self, eeg_dir):
+    def __init__(self, eeg_dir, stim_path=None):
         eeg_dir = self.eeg_dir = Path(eeg_dir)
 
-        stim_path = eeg_dir / "stimuli" / "AliceChapterOne-EEG.csv"
+        if stim_path is None:
+            # Load default stimulus representation.
+            stim_path = eeg_dir / "stimuli" / "AliceChapterOne-EEG.csv"
+
         self._stim_df = pd.read_csv(
             stim_path,
             index_col=None) \
